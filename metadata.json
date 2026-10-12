@@ -1,0 +1,6 @@
+{
+  "name": "יועץ הרכב שטראוס - Yoetz HaRechev",
+  "description": "מחשבון ויועץ רכב חברה חכם לעובדי שטראוס: השוואת שכר נטו, כלי רכב חשמליים, מסלול ברוכת ילדים, ויתור על רכב וחישוב שווי שימוש מדויק.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

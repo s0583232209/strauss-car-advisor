@@ -1,0 +1,100 @@
+[
+  {
+    "occupation": "נציג/ת מכירות שטח",
+    "group": "ב",
+    "carMandatory": true,
+    "canWaive": false,
+    "maintenance": 0
+  },
+  {
+    "occupation": "מנהל/ת אזור מכירות",
+    "group": "ג",
+    "carMandatory": true,
+    "canWaive": false,
+    "maintenance": 0
+  },
+  {
+    "occupation": "טכנאי/ת שירות",
+    "group": "א",
+    "carMandatory": true,
+    "canWaive": false,
+    "maintenance": 0
+  },
+  {
+    "occupation": "נהג/ת הפצה",
+    "group": "א",
+    "carMandatory": true,
+    "canWaive": false,
+    "maintenance": 0
+  },
+  {
+    "occupation": "מפקח/ת איכות במפעל",
+    "group": "א",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 1200
+  },
+  {
+    "occupation": "רכז/ת רכש",
+    "group": "א",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 1200
+  },
+  {
+    "occupation": "מהנדס/ת תהליך",
+    "group": "ב",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 1500
+  },
+  {
+    "occupation": "מפתח/ת תוכנה",
+    "group": "ב",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 1500
+  },
+  {
+    "occupation": "אנליסט/ית נתונים",
+    "group": "ב",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 1500
+  },
+  {
+    "occupation": "מנהל/ת מוצר",
+    "group": "ג",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 2000
+  },
+  {
+    "occupation": "מנהל/ת פיתוח",
+    "group": "ג",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 2000
+  },
+  {
+    "occupation": "מנהל/ת משאבי אנוש",
+    "group": "ג",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 2000
+  },
+  {
+    "occupation": "מנהל/ת מחלקה",
+    "group": "ד",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 2600
+  },
+  {
+    "occupation": "מנהל/ת חטיבה",
+    "group": "ד",
+    "carMandatory": false,
+    "canWaive": true,
+    "maintenance": 3000
+  }
+]

@@ -1,0 +1,233 @@
+[
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00885",
+    "modelCode": "00643",
+    "commercialName": "PICANTO",
+    "benefitValue": 2690,
+    "driveCode": 0,
+    "listPrice": 105900,
+    "sourceRow": 14210
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00672",
+    "modelCode": "00130",
+    "commercialName": "YARIS CROSS HSD",
+    "benefitValue": 3350,
+    "driveCode": 1,
+    "listPrice": 154990,
+    "sourceRow": 21045
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "01014",
+    "modelCode": "00012",
+    "commercialName": "BYD DOLPHIN",
+    "benefitValue": 2590,
+    "driveCode": 3,
+    "listPrice": 150990,
+    "sourceRow": 31204
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00778",
+    "modelCode": "00618",
+    "commercialName": "LEON",
+    "benefitValue": 3880,
+    "driveCode": 0,
+    "listPrice": 152900,
+    "sourceRow": 18942
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00885",
+    "modelCode": "00619",
+    "commercialName": "NIRO",
+    "benefitValue": 2950,
+    "driveCode": 1,
+    "listPrice": 139000,
+    "sourceRow": 14302
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00443",
+    "modelCode": "00032",
+    "commercialName": "MG4",
+    "benefitValue": 2430,
+    "driveCode": 3,
+    "listPrice": 150000,
+    "sourceRow": 27814
+  },
+  {
+    "regYear": "2026",
+    "vehicleType": "1",
+    "productCode": "00839",
+    "modelCode": "00295",
+    "commercialName": "COROLLA",
+    "benefitValue": 4120,
+    "driveCode": 0,
+    "listPrice": 165990,
+    "sourceRow": 16400
+  },
+  {
+    "regYear": "2026",
+    "vehicleType": "1",
+    "productCode": "00253",
+    "modelCode": "00138",
+    "commercialName": "KONA EV",
+    "benefitValue": 2960,
+    "driveCode": 3,
+    "listPrice": 174990,
+    "sourceRow": 8920
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00413",
+    "modelCode": "00296",
+    "commercialName": "COROLLA CROSS",
+    "benefitValue": 4070,
+    "driveCode": 1,
+    "listPrice": 182990,
+    "sourceRow": 12890
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "01014",
+    "modelCode": "00003",
+    "commercialName": "ATTO 3",
+    "benefitValue": 3130,
+    "driveCode": 3,
+    "listPrice": 177500,
+    "sourceRow": 31105
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "2",
+    "productCode": "01014",
+    "modelCode": "00003",
+    "commercialName": "TANG",
+    "benefitValue": 6950,
+    "driveCode": 3,
+    "listPrice": 315000,
+    "sourceRow": 31106
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00885",
+    "modelCode": "00675",
+    "commercialName": "EV3",
+    "benefitValue": 2930,
+    "driveCode": 3,
+    "listPrice": 169900,
+    "sourceRow": 14450
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00253",
+    "modelCode": "00133",
+    "commercialName": "TUCSON",
+    "benefitValue": 4790,
+    "driveCode": 0,
+    "listPrice": 188497,
+    "sourceRow": 8810
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00588",
+    "modelCode": "00446",
+    "commercialName": "MAZDA 3",
+    "benefitValue": 4570,
+    "driveCode": 0,
+    "listPrice": 179900,
+    "sourceRow": 24190
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "01327",
+    "modelCode": "00730",
+    "commercialName": "MODEL 3",
+    "benefitValue": 4150,
+    "driveCode": 3,
+    "listPrice": 217813,
+    "sourceRow": 45910
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00676",
+    "modelCode": "01455",
+    "commercialName": "OCTAVIA",
+    "benefitValue": 5150,
+    "driveCode": 0,
+    "listPrice": 202690,
+    "sourceRow": 29810
+  },
+  {
+    "regYear": "2026",
+    "vehicleType": "1",
+    "productCode": "00416",
+    "modelCode": "00294",
+    "commercialName": "SPORTAGE HEV",
+    "benefitValue": 4550,
+    "driveCode": 2,
+    "listPrice": 229900,
+    "sourceRow": 13910
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "01014",
+    "modelCode": "00014",
+    "commercialName": "SEAL",
+    "benefitValue": 4970,
+    "driveCode": 3,
+    "listPrice": 250000,
+    "sourceRow": 31250
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00413",
+    "modelCode": "00368",
+    "commercialName": "RAV4",
+    "benefitValue": 4470,
+    "driveCode": 1,
+    "listPrice": 199000,
+    "sourceRow": 12940
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00885",
+    "modelCode": "00648",
+    "commercialName": "CARNIVAL",
+    "benefitValue": 8120,
+    "driveCode": 0,
+    "listPrice": 319900,
+    "sourceRow": 14500
+  },
+  {
+    "regYear": "2025",
+    "vehicleType": "1",
+    "productCode": "00481",
+    "modelCode": "00533",
+    "commercialName": "SANTA FE",
+    "benefitValue": 4700,
+    "driveCode": 0,
+    "listPrice": 185000,
+    "sourceRow": 11400
+  }
+]
