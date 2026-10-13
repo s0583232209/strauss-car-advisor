@@ -102,7 +102,15 @@ export function buildScenario(
     evGrossUp: 0,
   };
 
-  if (request.type === 'waive_car') {
+  if (request.type === 'keep') {
+    // No change: the alternative is exactly today's state.
+    altCarLabel = todayCarLabel;
+    altState.benefitValue = todayState.benefitValue;
+    altState.maintenance = todayState.maintenance;
+    altState.participation = todayState.participation;
+    altState.familyGapShare = todayState.familyGapShare;
+    altState.evGrossUp = 0;
+  } else if (request.type === 'waive_car') {
     altCarLabel = `ויתור על רכב ואחזקת רכב (${occ.maintenance.toLocaleString()} ₪)`;
     if (occ.carMandatory || !occ.canWaive) {
       eligible = false;
@@ -202,11 +210,23 @@ export function buildScenario(
   const exactDiff = altBreakdown.net - todayBreakdown.net;
 
   // 5. Delta Steps and Explanations
-  const { steps, sumSteps } = buildDeltaSteps(todayState, altState);
+  const { steps, sumSteps } =
+    request.type === 'keep'
+      ? { steps: [], sumSteps: 0 }
+      : buildDeltaSteps(todayState, altState);
+
+  // SPEC 3.3: the delta steps must add up to the exact net difference.
+  if (Math.abs(sumSteps - exactDiff) > 1e-6) {
+    throw new Error(
+      `buildScenario(${request.type}): sum of steps (${sumSteps}) != exactDiff (${exactDiff})`
+    );
+  }
   const summary_he = buildPlainHebrewSummary(todayState, altState, todayCarLabel, altCarLabel);
 
   return {
     scenarioType: request.type,
+    requestedScenarioType: request.type,
+    requestedCarId: request.targetCarId ?? targetCar?.id,
     eligible,
     eligibilityReason_he,
     todayState,

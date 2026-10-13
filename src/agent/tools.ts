@@ -266,7 +266,11 @@ export async function executeTool(
         );
 
         // Calculate baseline today state
-        const baseline = buildScenario(context.profile, { type: 'keep' as any });
+        const baseline: ComparisonResult = {
+          ...buildScenario(context.profile, { type: 'keep' }),
+          requestedScenarioType: scType,
+          requestedCarId: targetCarId,
+        };
         context.onComparisonRun(baseline);
 
         const res = {
