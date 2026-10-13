@@ -28,6 +28,7 @@ import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scen
 import { ComparisonResult, EligibilityGroup, EmployeeProfile } from '../engine/types.ts';
 import { applyRepAnswer, findUndeliveredAnswers } from '../store/repAnswer.ts';
 import { ChatMessage, StorageAdapter, SupportTicket } from '../store/types.ts';
+import { AdvisorLogo, Pinwheel } from './CarDecor.tsx';
 import { ComparisonCard } from './ComparisonCard.tsx';
 import { PayslipModal } from './PayslipModal.tsx';
 
@@ -44,6 +45,14 @@ interface EmployeeViewProps {
   sessionId: string;
   onTicketCreated: () => void;
 }
+
+// Sample-question chips take turns through the Strauss pinwheel colors
+const CHIP_COLORS = [
+  'bg-brand-light border-brand/20 hover:bg-brand/15',
+  'bg-sky-light border-sky/30 hover:bg-sky/20',
+  'bg-lime-light border-green/25 hover:bg-lime/60',
+  'bg-orange-light border-orange/30 hover:bg-orange/20',
+];
 
 export const EmployeeView: React.FC<EmployeeViewProps> = ({
   storage,
@@ -374,18 +383,18 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Demo helper bar */}
-      <div className="bg-white p-4 rounded-xl border border-[#E3E8EE] mb-6 shadow-xs">
+      <div className="bg-white p-4 rounded-xl border border-line border-t-[3px] border-t-brand mb-6 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Preset employee picker */}
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-[#0E6E8C]" />
+              <Users className="w-4 h-4 text-brand-dark" />
               <span>טען עובד לדוגמה:</span>
             </span>
             <select
               onChange={(e) => (e.target.value ? handleLoadSampleEmployee(e.target.value) : handleNewConversation())}
               value={profile.id || ''}
-              className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#0E6E8C]"
+              className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand"
             >
               <option value="">ללא: שיחה חדשה עם נתונים אמיתיים</option>
               {(employeesData as any[]).map((emp) => (
@@ -403,13 +412,13 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               onClick={() => setRepParticipationMode(!repParticipationMode)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors ${
                 repParticipationMode
-                  ? 'bg-[#B4690E]/15 text-[#B4690E] border border-[#B4690E]/30'
+                  ? 'bg-warning/15 text-warning border border-warning/30'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
               {repParticipationMode ? (
                 <>
-                  <ToggleRight className="w-4 h-4 text-[#B4690E]" />
+                  <ToggleRight className="w-4 h-4 text-warning" />
                   <span>אימות נציג (סימולציית פנייה)</span>
                 </>
               ) : (
@@ -424,7 +433,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
 
         {/* Quick sample question chips */}
         <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-slate-400 ml-1">שאלות מפתח:</span>
+          <span className="text-xs text-muted ml-1">🚦 שאלות מפתח:</span>
           {sampleChips.map((chip, idx) => (
             <button
               key={idx}
@@ -432,7 +441,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                 const loaded = await handleLoadSampleEmployee(chip.empId);
                 handleSendMessage(chip.text, loaded);
               }}
-              className="text-xs px-2.5 py-1 rounded-md bg-slate-50 hover:bg-[#0E6E8C]/10 hover:text-[#0E6E8C] text-slate-700 border border-slate-200 transition-colors"
+              className={`text-xs px-3 py-1.5 rounded-full text-ink border transition-colors ${CHIP_COLORS[idx % CHIP_COLORS.length]}`}
             >
               {chip.label}
             </button>
@@ -445,17 +454,17 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         {/* Left Column: Chat & Comparison Card (8 cols) */}
         <div className="lg:col-span-8 flex flex-col space-y-4">
           {/* Chat Container */}
-          <div className="bg-white rounded-2xl border border-[#E3E8EE] shadow-xs flex flex-col h-[520px]">
+          <div className="bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs flex flex-col h-[520px]">
             {/* Chat Header */}
             <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-[#0E6E8C] text-white flex items-center justify-center text-xs font-bold">
-                  יו
+                <div className="w-10 h-10 rounded-full bg-white border border-line shadow-xs flex items-center justify-center shrink-0">
+                  <AdvisorLogo className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#1C2733]">שיחה עם יועץ הרכב</h3>
-                  <span className="text-[11px] text-[#1B8A5A] flex items-center gap-1 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#1B8A5A] animate-pulse"></span>
+                  <h3 className="text-sm font-bold text-ink">שיחה עם יועץ הרכב</h3>
+                  <span className="text-[11px] text-success flex items-center gap-1 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
                     מחובר · מנוע חישוב שכר 2025
                   </span>
                 </div>
@@ -504,7 +513,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                   return (
                     <div
                       key={msg.id}
-                      className="p-3 rounded-xl bg-[#0E6E8C]/10 border border-[#0E6E8C]/20 text-xs sm:text-sm text-[#0E6E8C] font-medium"
+                      className="p-3 rounded-xl bg-brand/10 border border-brand/20 text-xs sm:text-sm text-brand-dark font-medium"
                     >
                       {msg.content}
                     </div>
@@ -519,8 +528,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-3 leading-relaxed ${
                         isUser
-                          ? 'bg-[#0E6E8C] text-white rounded-br-xs'
-                          : 'bg-slate-100 text-[#1C2733] rounded-bl-xs'
+                          ? 'bg-brand text-white rounded-br-xs'
+                          : 'bg-white text-ink border border-line rounded-bl-xs shadow-xs'
                       }`}
                     >
                       <p className="whitespace-pre-line">{msg.content}</p>
@@ -532,17 +541,9 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               {/* Typing indicator */}
               {isTyping && (
                 <div className="flex justify-end">
-                  <div className="bg-slate-100 rounded-2xl px-4 py-3 rounded-bl-xs flex items-center gap-1.5 text-slate-500 text-xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"></span>
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
-                      style={{ animationDelay: '0.2s' }}
-                    ></span>
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
-                      style={{ animationDelay: '0.4s' }}
-                    ></span>
-                    <span className="mr-2">מחשב נתונים במנוע השכר...</span>
+                  <div className="bg-white border border-line shadow-xs rounded-2xl px-4 py-2.5 rounded-bl-xs flex items-center gap-2 text-muted text-xs font-medium">
+                    <Pinwheel className="w-6 h-6" spin />
+                    <span>מחשב נתונים במנוע השכר...</span>
                   </div>
                 </div>
               )}
@@ -573,13 +574,13 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="כתבו כאן... (למשל: מה יקרה לנטו אם אעבור לרכב חשמלי?)"
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E6E8C]/20 focus:border-[#0E6E8C]"
+                  className="flex-1 px-4 py-2.5 rounded-full border border-line bg-surface/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
                 />
 
                 <button
                   type="submit"
                   disabled={!inputValue.trim() || isTyping}
-                  className="px-4 py-2.5 rounded-xl bg-[#0E6E8C] text-white hover:bg-[#0B566E] disabled:opacity-40 transition-colors flex items-center gap-1.5 text-sm font-semibold shrink-0"
+                  className="lift px-4 py-2.5 rounded-full bg-brand text-white hover:bg-brand-dark disabled:opacity-40 transition-colors flex items-center gap-1.5 text-sm font-semibold shrink-0"
                 >
                   <span>שלח</span>
                   <Send className="w-3.5 h-3.5 rotate-180" />
@@ -625,21 +626,21 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         </div>
 
         {/* Right Column: Collected Profile Panel (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-[#E3E8EE] shadow-xs p-5 sticky top-20">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs p-5 sticky top-24">
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#0E6E8C]/10 text-[#0E6E8C] flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center">
                 <User className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#1C2733]">פרופיל שנאסף</h3>
+                <h3 className="text-sm font-bold text-ink">פרופיל שנאסף</h3>
                 <span className="text-[11px] text-slate-500">נתוני שכר וזכאות נוכחיים</span>
               </div>
             </div>
 
             <button
               onClick={() => setIsEditingProfile(!isEditingProfile)}
-              className="px-2.5 py-1 text-xs font-semibold text-[#0E6E8C] hover:bg-[#0E6E8C]/10 rounded-lg transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-xs font-semibold text-brand-dark hover:bg-brand/10 rounded-lg transition-colors flex items-center gap-1"
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>{isEditingProfile ? 'סיום' : 'תיקון נתונים'}</span>
@@ -692,8 +693,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                 <span
                   className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                     profile.hasCar
-                      ? 'bg-[#0E6E8C]/10 text-[#0E6E8C]'
-                      : 'bg-[#B4690E]/10 text-[#B4690E]'
+                      ? 'bg-brand/10 text-brand-dark'
+                      : 'bg-warning/10 text-warning'
                   }`}
                 >
                   {profile.hasCar === undefined ? 'חסר' : profile.hasCar ? 'רכב חברה קיים' : 'ויתור (אחזקה)'}
