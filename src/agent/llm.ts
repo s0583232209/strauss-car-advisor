@@ -6,19 +6,31 @@
 // In-memory request cache to save quota on repeated calls
 const requestCache = new Map<string, any>();
 
+/** One conversation entry sent to the server proxy. */
+export type LlmMessage =
+  | { role: 'user' | 'assistant'; content: string }
+  // Raw model turn with functionCall parts, sent back unchanged (Gemini 3 thought signatures)
+  | { role: 'model_content'; content: unknown }
+  // Results of the tool calls of the previous model turn, in the same order
+  | { role: 'tool_responses'; responses: Array<{ name: string; id?: string; response: Record<string, unknown> }> };
+
 export interface LlmCallOptions {
-  messages: Array<{ role: string; content: string }>;
+  messages: LlmMessage[];
   tools?: any[];
   systemInstruction?: string;
   responseMimeType?: string;
   responseSchema?: any;
   inlineData?: { mimeType: string; data: string };
+  /** Model that produced the previous turn; the server tries it first */
+  preferredModel?: string;
   onThrottled?: (isThrottled: boolean, message?: string) => void;
 }
 
 export interface LlmCallResult {
   text: string;
-  functionCalls?: Array<{ name: string; args: any }>;
+  functionCalls?: Array<{ name: string; args: any; id?: string }>;
+  modelContent?: unknown;
+  model?: string;
   isFallback?: boolean;
 }
 
@@ -60,6 +72,7 @@ export async function callLlm(options: LlmCallOptions): Promise<LlmCallResult> {
           responseMimeType: options.responseMimeType,
           responseSchema: options.responseSchema,
           inlineData: options.inlineData,
+          preferredModel: options.preferredModel,
         }),
       });
 
@@ -133,7 +146,10 @@ async function tryFallbackProvider(options: LlmCallOptions): Promise<LlmCallResu
         model,
         messages: [
           ...(options.systemInstruction ? [{ role: 'system', content: options.systemInstruction }] : []),
-          ...options.messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+          // The OpenAI-compatible fallback has no Gemini function-calling turns: send text turns only
+          ...options.messages
+            .filter((m): m is Extract<LlmMessage, { content: string }> => m.role === 'user' || m.role === 'assistant')
+            .map((m) => ({ role: m.role, content: m.content })),
         ],
       }),
     });
