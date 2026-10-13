@@ -21,6 +21,16 @@ app.use(express.json({ limit: '25mb' }));
 
 // Initialize GoogleGenAI SDK on server-side only
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
+// Ordered model list from GEMINI_MODEL (comma-separated). On 429/503/404 or timeout the next model is tried.
+const geminiModels = (process.env.GEMINI_MODEL || 'gemini-3.8-flash')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+const MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS) || 20000;
+// Skip a model for a while after it fails, so each agent turn does not re-hit an exhausted model
+const COOLDOWN_MS: Record<number, number> = { 429: 60000, 503: 30000, 404: 600000, 408: 30000 };
+const modelCooldownUntil = new Map<string, number>();
+
 const ai = new GoogleGenAI({
   apiKey: geminiApiKey,
   httpOptions: {
@@ -30,11 +40,54 @@ const ai = new GoogleGenAI({
   },
 });
 
+/** Calls generateContent on the first available model, falling back on 429/503/404/timeout. */
+async function generateWithFallback(
+  params: Omit<Parameters<typeof ai.models.generateContent>[0], 'model'>
+): Promise<{ response: Awaited<ReturnType<typeof ai.models.generateContent>>; model: string }> {
+  const now = Date.now();
+  const available = geminiModels.filter((m) => (modelCooldownUntil.get(m) || 0) <= now);
+  // If every model is cooling down, still try them all rather than failing immediately
+  const candidates = available.length > 0 ? available : geminiModels;
+  let lastError: any = null;
+
+  for (const model of candidates) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MODEL_TIMEOUT_MS);
+    try {
+      const response = await ai.models.generateContent({
+        ...params,
+        model,
+        config: { ...(params.config || {}), abortSignal: controller.signal },
+      });
+      modelCooldownUntil.delete(model);
+      return { response, model };
+    } catch (error: any) {
+      const timedOut = controller.signal.aborted;
+      const status = timedOut ? 408 : Number(error?.status) || 500;
+      // A timeout is reported to the client as 503 so its backoff logic retries
+      lastError = timedOut
+        ? Object.assign(new Error(`Gemini model ${model} timed out after ${MODEL_TIMEOUT_MS}ms`), { status: 503 })
+        : error;
+      if (!(status in COOLDOWN_MS)) throw error; // not a capacity/model problem: do not mask it
+      modelCooldownUntil.set(model, Date.now() + COOLDOWN_MS[status]);
+      console.warn(`Gemini model ${model} unavailable (${status}); trying next model`);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError || new Error('No Gemini model available');
+}
+
 // Endpoint: Health check
 app.get('/api/health', (_req: Request, res: Response) => {
+  const now = Date.now();
   res.json({
     status: 'ok',
     hasGeminiKey: Boolean(geminiApiKey),
+    models: geminiModels.map((m) => ({
+      model: m,
+      coolingDownSec: Math.max(0, Math.round(((modelCooldownUntil.get(m) || 0) - now) / 1000)),
+    })),
     timestamp: new Date().toISOString(),
   });
 });
@@ -91,8 +144,7 @@ app.post('/api/gemini/generate', async (req: Request, res: Response) => {
     if (responseMimeType) config.responseMimeType = responseMimeType;
     if (responseSchema) config.responseSchema = responseSchema;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+    const { response, model } = await generateWithFallback({
       contents: contents.length > 0 ? contents : 'שלום',
       config,
     });
@@ -106,6 +158,7 @@ app.post('/api/gemini/generate', async (req: Request, res: Response) => {
     res.json({
       text: response.text || '',
       functionCalls: functionCalls && functionCalls.length > 0 ? functionCalls : undefined,
+      model,
     });
   } catch (error: any) {
     const status = error?.status || 500;
@@ -143,8 +196,7 @@ app.post('/api/gemini/extract-payslip', async (req: Request, res: Response) => {
 עבור כל שדה החזר אובייקט עם { "value": ערך_או_null, "confidence": "high"|"medium"|"low", "sourceQuote": "ציטוט מהמסמך" }.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+    const { response } = await generateWithFallback({
       contents: [
         {
           role: 'user',
