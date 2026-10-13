@@ -90,7 +90,7 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
           y1={getY(0)}
           x2={chartWidth - 10}
           y2={getY(0)}
-          stroke="#E3E8EE"
+          stroke="#E2E8F0"
           strokeWidth="1"
           strokeDasharray="3 3"
         />
@@ -102,9 +102,9 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
           const barHeight = Math.max(3, Math.abs(y2 - y1));
           const topY = Math.min(y1, y2);
 
-          let barColor = '#0E6E8C'; // Base total
+          let barColor = '#0390CB'; // Base total
           if (!item.isTotal) {
-            barColor = (item.delta || 0) >= 0 ? '#1B8A5A' : '#C0392B';
+            barColor = (item.delta || 0) >= 0 ? '#78A12F' : '#ED3024';
           }
 
           const valueDisplay = item.isTotal
@@ -144,7 +144,7 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
                 textAnchor="middle"
                 fontSize="10"
                 fontWeight="600"
-                fill="#1C2733"
+                fill="#1A202C"
               >
                 {valueDisplay}
               </text>

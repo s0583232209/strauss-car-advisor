@@ -133,11 +133,11 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#0E6E8C]/10 text-[#0E6E8C] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center">
               <FileText className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-[#1C2733]">טעינת תלוש שכר או חוזה העסקה</h3>
+              <h3 className="font-bold text-ink">טעינת תלוש שכר או חוזה העסקה</h3>
               <p className="text-xs text-slate-500">חילוץ אוטומטי של שכר, הפרשות ורכב קיים</p>
             </div>
           </div>
@@ -152,7 +152,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
         {/* Content */}
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
           {/* Privacy Banner */}
-          <div className="p-3.5 rounded-xl bg-[#B4690E]/10 border border-[#B4690E]/20 text-xs text-[#B4690E] flex items-start gap-2.5">
+          <div className="p-3.5 rounded-xl bg-warning/10 border border-warning/20 text-xs text-warning flex items-start gap-2.5">
             <Lock className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold">אזהרת פרטיות חשובה: </span>
@@ -165,7 +165,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
           {!extractedData ? (
             /* Upload State */
             <div className="space-y-4">
-              <label className="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-[#0E6E8C] hover:bg-slate-50 transition-colors">
+              <label className="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-brand hover:bg-slate-50 transition-colors">
                 <Upload className="w-8 h-8 text-slate-400 mb-2" />
                 <span className="text-sm font-semibold text-slate-700">
                   {file ? file.name : 'לחצו לבחירת תלוש שכר או גררו קובץ לכאן'}
@@ -185,7 +185,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
                   <button
                     onClick={handleUploadAndAnalyze}
                     disabled={isLoading}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0E6E8C] text-white hover:bg-[#0B566E] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    className="lift px-4 py-2 rounded-full text-xs font-semibold bg-brand text-white hover:bg-brand-dark disabled:opacity-50 transition-colors flex items-center gap-1.5"
                   >
                     {isLoading ? (
                       <>
@@ -203,7 +203,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
               )}
 
               {error && (
-                <div className="p-3 rounded-lg bg-[#C0392B]/10 text-[#C0392B] text-xs flex items-center gap-2">
+                <div className="p-3 rounded-lg bg-danger/10 text-danger text-xs flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -213,13 +213,13 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
             /* Review & Edit Table: "מה קראנו, אשרו או תקנו" */
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-[#1C2733] flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-[#1B8A5A]" />
+                <h4 className="font-bold text-sm text-ink flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-success" />
                   <span>מה קראנו – אשרו או תקנו לפני מיזוג:</span>
                 </h4>
                 <button
                   onClick={() => setExtractedData(null)}
-                  className="text-xs text-[#0E6E8C] hover:underline"
+                  className="text-xs text-brand-dark hover:underline"
                 >
                   העלה קובץ אחר
                 </button>
@@ -246,14 +246,14 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
                             setEditableValues({ ...editableValues, [key]: e.target.value })
                           }
                           placeholder="לא זוהה"
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-[#0E6E8C]"
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-brand"
                         />
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
                             conf === 'high'
-                              ? 'bg-[#1B8A5A]/10 text-[#1B8A5A]'
+                              ? 'bg-success/10 text-success'
                               : conf === 'medium'
-                              ? 'bg-[#B4690E]/10 text-[#B4690E]'
+                              ? 'bg-warning/10 text-warning'
                               : 'bg-slate-100 text-slate-500'
                           }`}
                         >
@@ -279,7 +279,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
             </button>
             <button
               onClick={handleConfirmMerge}
-              className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0E6E8C] text-white hover:bg-[#0B566E] transition-colors flex items-center gap-1.5"
+              className="lift px-4 py-2 rounded-full text-xs font-semibold bg-brand text-white hover:bg-brand-dark transition-colors flex items-center gap-1.5"
             >
               <Check className="w-3.5 h-3.5" />
               <span>אשר ועדכן פרופיל</span>

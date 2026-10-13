@@ -21,14 +21,24 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { runAgentTurn } from '../agent/loop.ts';
+import { getMissingFields } from '../agent/tools.ts';
 import { OPENING_MESSAGE } from '../agent/prompt.ts';
 import employeesData from '../data/employees.json';
 import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
 import { ComparisonResult, EligibilityGroup, EmployeeProfile } from '../engine/types.ts';
 import { applyRepAnswer, findUndeliveredAnswers } from '../store/repAnswer.ts';
 import { ChatMessage, StorageAdapter, SupportTicket } from '../store/types.ts';
+import { AdvisorLogo, Pinwheel } from './CarDecor.tsx';
 import { ComparisonCard } from './ComparisonCard.tsx';
 import { PayslipModal } from './PayslipModal.tsx';
+
+// Start of the system message shown when a sample employee is loaded (dry runs only)
+const SAMPLE_LOADED_PREFIX = 'נטענו בהצלחה נתוני הדוגמה של';
+
+// Empty profile: every field is undefined until the agent collects it (get_missing_fields);
+// 0 is a valid answer. EmployeeProfile keeps the fields required because the engine needs
+// them, so every buildScenario call is guarded by getMissingFields.
+const emptyProfile = () => ({}) as EmployeeProfile;
 
 interface EmployeeViewProps {
   storage: StorageAdapter;
@@ -36,34 +46,27 @@ interface EmployeeViewProps {
   onTicketCreated: () => void;
 }
 
+// Sample-question chips take turns through the Strauss pinwheel colors
+const CHIP_COLORS = [
+  'bg-brand-light border-brand/20 hover:bg-brand/15',
+  'bg-sky-light border-sky/30 hover:bg-sky/20',
+  'bg-lime-light border-green/25 hover:bg-lime/60',
+  'bg-orange-light border-orange/30 hover:bg-orange/20',
+];
+
 export const EmployeeView: React.FC<EmployeeViewProps> = ({
   storage,
   sessionId,
   onTicketCreated,
 }) => {
   // State: Profile
-  const [profile, setProfile] = useState<EmployeeProfile>(() => {
-    // Default initial profile
-    return (
-      (employeesData as any[])[0] || {
-        occupation: 'מנהל/ת מוצר',
-        group: 'ג',
-        base: 18500,
-        commissions: 0,
-        bonus: 0,
-        pensionPct: 6,
-        studyFundPct: 2.5,
-        creditPoints: 2.75,
-        childrenUpTo23: 2,
-        hasCar: true,
-        currentCarId: 'CAR-09',
-        currentCarName: 'COROLLA CROSS',
-        currentParticipation: 300,
-        currentBenefit: 4070,
-        currentMaintenance: 0,
-      }
-    );
-  });
+  const [profile, setProfile] = useState<EmployeeProfile>(emptyProfile);
+
+  // Recompute a comparison only when the profile is complete for its scenario
+  const recomputeIfComplete = (p: EmployeeProfile, prev: ComparisonResult): ComparisonResult | null =>
+    getMissingFields(p, prev.scenarioType).length > 0
+      ? null
+      : buildScenario(p, { type: prev.scenarioType, targetCarId: prev.targetCar?.id });
 
   // State: Messages & Conversation
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -95,16 +98,23 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   useEffect(() => {
     async function loadInitial() {
       const savedProfile = await storage.loadProfile(sessionId);
-      if (savedProfile) {
-        setProfile(savedProfile);
-      } else {
-        await storage.saveProfile(sessionId, profile);
-      }
+      const savedMessages = (await storage.loadMessages(sessionId)) || [];
 
-      const savedMessages = await storage.loadMessages(sessionId);
-      if (savedMessages && savedMessages.length > 0) {
+      // The profile belongs to its conversation. Keep it only if there is a conversation, and keep
+      // a sample profile only if it was loaded on purpose (older versions saved Noa as the default).
+      const hasConversation = savedMessages.length > 1;
+      const sampleLoaded = savedMessages.some((m) => m.role === 'system' && m.content.startsWith(SAMPLE_LOADED_PREFIX));
+      const keepSaved = !!savedProfile && hasConversation && (!savedProfile.id || sampleLoaded);
+
+      if (keepSaved) {
+        setProfile(savedProfile);
         setMessages(savedMessages);
+        const savedComp = await storage.loadLastComparison(sessionId);
+        if (savedComp) setLastComparison(savedComp);
       } else {
+        // Start clean: no profile, no comparison, only the greeting
+        await storage.saveProfile(sessionId, emptyProfile());
+        await storage.saveLastComparison(sessionId, null);
         // Initial greeting
         const greeting: ChatMessage = {
           id: 'msg-0',
@@ -114,11 +124,6 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         };
         setMessages([greeting]);
         await storage.saveMessages(sessionId, [greeting]);
-      }
-
-      const savedComp = await storage.loadLastComparison(sessionId);
-      if (savedComp) {
-        setLastComparison(savedComp);
       }
     }
 
@@ -227,11 +232,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
             storage.saveProfile(sessionId, updated);
             // If last comparison exists, recompute with updated profile
             const prevComparison = lastComparisonRef.current;
-            if (prevComparison) {
-              const recomputed = buildScenario(updated, {
-                type: prevComparison.scenarioType,
-                targetCarId: prevComparison.targetCar?.id,
-              });
+            const recomputed = prevComparison ? recomputeIfComplete(updated, prevComparison) : null;
+            if (recomputed) {
               lastComparisonRef.current = recomputed;
               setLastComparison(recomputed);
               storage.saveLastComparison(sessionId, recomputed);
@@ -309,7 +311,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
     const loadMsg: ChatMessage = {
       id: `sys-${Date.now()}`,
       role: 'system',
-      content: `נטענו בהצלחה נתוני הדוגמה של ${target.name} (${target.occupation}, קבוצה ${target.group}, שכר בסיס ${target.base?.toLocaleString()} ₪).`,
+      content: `${SAMPLE_LOADED_PREFIX} ${target.name} (${target.occupation}, קבוצה ${target.group}, שכר בסיס ${target.base?.toLocaleString()} ₪).`,
       timestamp: Date.now(),
     };
     const updatedMessages = [...messagesRef.current, loadMsg];
@@ -319,7 +321,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
     return { profile: target, messages: updatedMessages };
   };
 
-  // Reset conversation
+  // Reset conversation: a new conversation starts with an empty profile (no data carried over)
   const handleNewConversation = async () => {
     const greeting: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -327,8 +329,14 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
       content: OPENING_MESSAGE,
       timestamp: Date.now(),
     };
+    const cleared = emptyProfile();
+    profileRef.current = cleared;
+    lastComparisonRef.current = null;
+    messagesRef.current = [greeting];
+    setProfile(cleared);
     setMessages([greeting]);
     setLastComparison(null);
+    await storage.saveProfile(sessionId, cleared);
     await storage.saveMessages(sessionId, [greeting]);
     await storage.saveLastComparison(sessionId, null);
   };
@@ -375,20 +383,20 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Demo helper bar */}
-      <div className="bg-white p-4 rounded-xl border border-[#E3E8EE] mb-6 shadow-xs">
+      <div className="bg-white p-4 rounded-xl border border-line border-t-[3px] border-t-brand mb-6 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Preset employee picker */}
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-[#0E6E8C]" />
+              <Users className="w-4 h-4 text-brand-dark" />
               <span>טען עובד לדוגמה:</span>
             </span>
             <select
-              onChange={(e) => e.target.value && handleLoadSampleEmployee(e.target.value)}
+              onChange={(e) => (e.target.value ? handleLoadSampleEmployee(e.target.value) : handleNewConversation())}
               value={profile.id || ''}
-              className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#0E6E8C]"
+              className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand"
             >
-              <option value="">בחר עובד לדוגמה...</option>
+              <option value="">ללא: שיחה חדשה עם נתונים אמיתיים</option>
               {(employeesData as any[]).map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name} ({emp.occupation} · קבוצה {emp.group})
@@ -404,13 +412,13 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               onClick={() => setRepParticipationMode(!repParticipationMode)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors ${
                 repParticipationMode
-                  ? 'bg-[#B4690E]/15 text-[#B4690E] border border-[#B4690E]/30'
+                  ? 'bg-warning/15 text-warning border border-warning/30'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
               {repParticipationMode ? (
                 <>
-                  <ToggleRight className="w-4 h-4 text-[#B4690E]" />
+                  <ToggleRight className="w-4 h-4 text-warning" />
                   <span>אימות נציג (סימולציית פנייה)</span>
                 </>
               ) : (
@@ -425,7 +433,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
 
         {/* Quick sample question chips */}
         <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-slate-400 ml-1">שאלות מפתח:</span>
+          <span className="text-xs text-muted ml-1">🚦 שאלות מפתח:</span>
           {sampleChips.map((chip, idx) => (
             <button
               key={idx}
@@ -433,7 +441,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                 const loaded = await handleLoadSampleEmployee(chip.empId);
                 handleSendMessage(chip.text, loaded);
               }}
-              className="text-xs px-2.5 py-1 rounded-md bg-slate-50 hover:bg-[#0E6E8C]/10 hover:text-[#0E6E8C] text-slate-700 border border-slate-200 transition-colors"
+              className={`text-xs px-3 py-1.5 rounded-full text-ink border transition-colors ${CHIP_COLORS[idx % CHIP_COLORS.length]}`}
             >
               {chip.label}
             </button>
@@ -446,17 +454,17 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         {/* Left Column: Chat & Comparison Card (8 cols) */}
         <div className="lg:col-span-8 flex flex-col space-y-4">
           {/* Chat Container */}
-          <div className="bg-white rounded-2xl border border-[#E3E8EE] shadow-xs flex flex-col h-[520px]">
+          <div className="bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs flex flex-col h-[520px]">
             {/* Chat Header */}
             <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-[#0E6E8C] text-white flex items-center justify-center text-xs font-bold">
-                  יו
+                <div className="w-10 h-10 rounded-full bg-white border border-line shadow-xs flex items-center justify-center shrink-0">
+                  <AdvisorLogo className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#1C2733]">שיחה עם יועץ הרכב</h3>
-                  <span className="text-[11px] text-[#1B8A5A] flex items-center gap-1 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#1B8A5A] animate-pulse"></span>
+                  <h3 className="text-sm font-bold text-ink">שיחה עם יועץ הרכב</h3>
+                  <span className="text-[11px] text-success flex items-center gap-1 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
                     מחובר · מנוע חישוב שכר 2025
                   </span>
                 </div>
@@ -505,7 +513,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                   return (
                     <div
                       key={msg.id}
-                      className="p-3 rounded-xl bg-[#0E6E8C]/10 border border-[#0E6E8C]/20 text-xs sm:text-sm text-[#0E6E8C] font-medium"
+                      className="p-3 rounded-xl bg-brand/10 border border-brand/20 text-xs sm:text-sm text-brand-dark font-medium"
                     >
                       {msg.content}
                     </div>
@@ -520,8 +528,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-3 leading-relaxed ${
                         isUser
-                          ? 'bg-[#0E6E8C] text-white rounded-br-xs'
-                          : 'bg-slate-100 text-[#1C2733] rounded-bl-xs'
+                          ? 'bg-brand text-white rounded-br-xs'
+                          : 'bg-white text-ink border border-line rounded-bl-xs shadow-xs'
                       }`}
                     >
                       <p className="whitespace-pre-line">{msg.content}</p>
@@ -533,17 +541,9 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               {/* Typing indicator */}
               {isTyping && (
                 <div className="flex justify-end">
-                  <div className="bg-slate-100 rounded-2xl px-4 py-3 rounded-bl-xs flex items-center gap-1.5 text-slate-500 text-xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"></span>
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
-                      style={{ animationDelay: '0.2s' }}
-                    ></span>
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
-                      style={{ animationDelay: '0.4s' }}
-                    ></span>
-                    <span className="mr-2">מחשב נתונים במנוע השכר...</span>
+                  <div className="bg-white border border-line shadow-xs rounded-2xl px-4 py-2.5 rounded-bl-xs flex items-center gap-2 text-muted text-xs font-medium">
+                    <Pinwheel className="w-6 h-6" spin />
+                    <span>מחשב נתונים במנוע השכר...</span>
                   </div>
                 </div>
               )}
@@ -574,13 +574,13 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="כתבו כאן... (למשל: מה יקרה לנטו אם אעבור לרכב חשמלי?)"
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E6E8C]/20 focus:border-[#0E6E8C]"
+                  className="flex-1 px-4 py-2.5 rounded-full border border-line bg-surface/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
                 />
 
                 <button
                   type="submit"
                   disabled={!inputValue.trim() || isTyping}
-                  className="px-4 py-2.5 rounded-xl bg-[#0E6E8C] text-white hover:bg-[#0B566E] disabled:opacity-40 transition-colors flex items-center gap-1.5 text-sm font-semibold shrink-0"
+                  className="lift px-4 py-2.5 rounded-full bg-brand text-white hover:bg-brand-dark disabled:opacity-40 transition-colors flex items-center gap-1.5 text-sm font-semibold shrink-0"
                 >
                   <span>שלח</span>
                   <Send className="w-3.5 h-3.5 rotate-180" />
@@ -626,21 +626,21 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         </div>
 
         {/* Right Column: Collected Profile Panel (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-[#E3E8EE] shadow-xs p-5 sticky top-20">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs p-5 sticky top-24">
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#0E6E8C]/10 text-[#0E6E8C] flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center">
                 <User className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#1C2733]">פרופיל שנאסף</h3>
+                <h3 className="text-sm font-bold text-ink">פרופיל שנאסף</h3>
                 <span className="text-[11px] text-slate-500">נתוני שכר וזכאות נוכחיים</span>
               </div>
             </div>
 
             <button
               onClick={() => setIsEditingProfile(!isEditingProfile)}
-              className="px-2.5 py-1 text-xs font-semibold text-[#0E6E8C] hover:bg-[#0E6E8C]/10 rounded-lg transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-xs font-semibold text-brand-dark hover:bg-brand/10 rounded-lg transition-colors flex items-center gap-1"
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>{isEditingProfile ? 'סיום' : 'תיקון נתונים'}</span>
@@ -656,31 +656,27 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                 {isEditingProfile ? (
                   <input
                     type="number"
-                    value={profile.base || ''}
+                    min={0}
+                    value={profile.base ?? ''}
                     onChange={(e) => {
-                      const base = Number(e.target.value);
-                      const updated = { ...profile, base };
+                      const raw = e.target.value;
+                      const base = raw === '' || Number(raw) < 0 ? undefined : Number(raw);
+                      const updated = { ...profile, base } as EmployeeProfile;
                       setProfile(updated);
                       storage.saveProfile(sessionId, updated);
-                      if (lastComparison) {
-                        setLastComparison(
-                          buildScenario(updated, {
-                            type: lastComparison.scenarioType,
-                            targetCarId: lastComparison.targetCar?.id,
-                          })
-                        );
-                      }
+                      const recomputed = lastComparison ? recomputeIfComplete(updated, lastComparison) : null;
+                      if (recomputed) setLastComparison(recomputed);
                     }}
                     className="w-24 px-2 py-1 text-xs font-bold border border-slate-300 rounded bg-white"
                   />
                 ) : (
                   <span className="font-bold text-slate-900 text-sm">
-                    {profile.base ? `${profile.base?.toLocaleString()} ₪` : 'חסר'}
+                    {profile.base !== undefined ? `${profile.base.toLocaleString()} ₪` : 'חסר'}
                   </span>
                 )}
               </div>
               <span className="text-xs px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
-                קבוצה {profile.group}
+                קבוצה {profile.group ?? 'חסר'}
               </span>
             </div>
 
@@ -697,22 +693,24 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                 <span
                   className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                     profile.hasCar
-                      ? 'bg-[#0E6E8C]/10 text-[#0E6E8C]'
-                      : 'bg-[#B4690E]/10 text-[#B4690E]'
+                      ? 'bg-brand/10 text-brand-dark'
+                      : 'bg-warning/10 text-warning'
                   }`}
                 >
-                  {profile.hasCar ? 'רכב חברה קיים' : 'ויתור (אחזקה)'}
+                  {profile.hasCar === undefined ? 'חסר' : profile.hasCar ? 'רכב חברה קיים' : 'ויתור (אחזקה)'}
                 </span>
               </div>
               <div className="font-bold text-slate-900">
-                {profile.hasCar
+                {profile.hasCar === undefined
+                  ? 'חסר'
+                  : profile.hasCar
                   ? profile.currentCarName
-                  : `אחזקת רכב: ${profile.currentMaintenance?.toLocaleString()} ₪`}
+                  : `אחזקת רכב: ${profile.currentMaintenance === undefined ? 'חסר' : `${profile.currentMaintenance.toLocaleString()} ₪`}`}
               </div>
               {profile.hasCar && (
                 <div className="text-[11px] text-slate-600 mt-1 flex justify-between">
-                  <span>שווי שימוש: {profile.currentBenefit?.toLocaleString()} ₪</span>
-                  <span>השתתפות: {profile.currentParticipation?.toLocaleString()} ₪</span>
+                  <span>שווי שימוש: {profile.currentBenefit === undefined ? 'חסר' : `${profile.currentBenefit.toLocaleString()} ₪`}</span>
+                  <span>השתתפות: {profile.currentParticipation === undefined ? 'חסר' : `${profile.currentParticipation.toLocaleString()} ₪`}</span>
                 </div>
               )}
             </div>
@@ -721,19 +719,19 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">הפרשת פנסיה:</span>
-                <span className="font-bold text-slate-900">{profile.pensionPct}%</span>
+                <span className="font-bold text-slate-900">{profile.pensionPct === undefined ? 'חסר' : `${profile.pensionPct}%`}</span>
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">קרן השתלמות:</span>
-                <span className="font-bold text-slate-900">{profile.studyFundPct}%</span>
+                <span className="font-bold text-slate-900">{profile.studyFundPct === undefined ? 'חסר' : `${profile.studyFundPct}%`}</span>
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">נקודות זיכוי:</span>
-                <span className="font-bold text-slate-900">{profile.creditPoints}</span>
+                <span className="font-bold text-slate-900">{profile.creditPoints ?? 'חסר'}</span>
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">ילדים עד 23:</span>
-                <span className="font-bold text-slate-900">{profile.childrenUpTo23}</span>
+                <span className="font-bold text-slate-900">{profile.childrenUpTo23 ?? 'חסר'}</span>
               </div>
             </div>
           </div>
@@ -752,14 +750,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
           setProfile((prev) => {
             const updated = { ...prev, ...extracted };
             storage.saveProfile(sessionId, updated);
-            if (lastComparison) {
-              setLastComparison(
-                buildScenario(updated, {
-                  type: lastComparison.scenarioType,
-                  targetCarId: lastComparison.targetCar?.id,
-                })
-              );
-            }
+            const recomputed = lastComparison ? recomputeIfComplete(updated, lastComparison) : null;
+            if (recomputed) setLastComparison(recomputed);
             return updated;
           });
 

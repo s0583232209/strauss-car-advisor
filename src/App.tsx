@@ -9,6 +9,7 @@ import { StorageAdapter, SupportTicket } from './store/types.ts';
 import { AdminView } from './ui/AdminView.tsx';
 import { EmployeeView } from './ui/EmployeeView.tsx';
 import { GuideView } from './ui/GuideView.tsx';
+import { AdvisorLogo, HillsScene } from './ui/CarDecor.tsx';
 import { ActiveScreen, Header } from './ui/Header.tsx';
 import { RepresentativeView } from './ui/RepresentativeView.tsx';
 
@@ -60,7 +61,7 @@ export default function App() {
   }, [storage]);
 
   return (
-    <div className="min-h-screen bg-[#FAFBFC] text-[#1C2733] flex flex-col font-['Heebo',sans-serif]">
+    <div className="min-h-screen bg-surface text-ink flex flex-col font-sans">
       {/* Top Header with role navigation */}
       <Header
         activeScreen={activeScreen}
@@ -88,9 +89,13 @@ export default function App() {
         {activeScreen === 'guide' && <GuideView />}
       </main>
 
-      {/* Global Minimal Footer */}
-      <footer className="py-4 border-t border-[#E3E8EE] bg-white text-center text-xs text-slate-400">
-        יועץ הרכב של שטראוס (Yoetz HaRechev) · מערכת השוואת שכר נטו ורכב חברה · שנת מס 2025
+      {/* Footer: Strauss-green hills with vehicles slowly driving over them */}
+      <footer className="mt-10">
+        <HillsScene />
+        <div className="bg-green -mt-px py-3 px-4 flex items-center justify-center gap-2 text-center text-xs font-medium text-ink">
+          <AdvisorLogo variant="light" className="w-6 h-6 shrink-0" />
+          <span>יועץ הרכב של שטראוס · מערכת השוואת שכר נטו ורכב חברה · שנת מס 2025</span>
+        </div>
       </footer>
     </div>
   );
