@@ -6,7 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
-guide3.html
-docs/
-CLAUDE.md
-data/
+
+data/raw/vehicles.csv 
+.vercel/
