@@ -25,8 +25,9 @@ Actual commands today (vitest is NOT installed yet, see guide step G.1):
 
 - `npm run dev`: Express + Vite middleware (`tsx server.ts`) at http://127.0.0.1:3000
 - `npm run build`: `vite build` to `dist/`. `npm run lint`: `tsc --noEmit`
-- `npx tsx tests/reference.check.ts`: independent SPEC 8.1 check. Part A must stay 12/12; part C lists known agent/scenario bugs.
-- `npx tsx tests/vehicles.check.ts`: checks benefit values against `data/raw/vehicles.csv` and runs the real CSV parser on a fake IndexedDB.
+- `npx tsx tests/reference.check.ts`: independent SPEC 8.1 check. Part A must stay 12/12; part C lists known agent/scenario bugs, so TOTAL must only go up (74/83 on main, 2026-10-13).
+- `tests/vehicles.check.ts` was deleted and not restored; its findings are in docs/AUDIT.md section 3.
+- `http://127.0.0.1:3000/api/health`: shows `hasGeminiKey` and the configured models with their cooldowns.
 - In-app calibration: `src/tests/calibration.test.ts` (Admin tab; not a vitest file).
 
 ## Project origin
@@ -38,9 +39,10 @@ First read docs/AUDIT.md if it exists (gap report vs docs/SPEC.md).
 
 As generated; see docs/AUDIT.md. New files: scripts/, api/, docs/, data/raw/.
 
-Actual layout (verified 2026-10-13):
+Actual layout (verified 2026-10-13, update 2):
 
-- `server.ts`: Express. Holds GEMINI_API_KEY, exposes `POST /api/gemini/generate` and `/api/gemini/extract-payslip`
+- `server.ts`: Express. Holds GEMINI_API_KEY and the GEMINI_MODEL list, exposes `POST /api/gemini/generate`, `/api/gemini/extract-payslip` and `GET /api/health`
+- Branches: `main` (K.1 + model fallback), `agent` (function-calling fix, pending merge), `status-branch` (docs/guide updates). Commit format: `type(branch-name): summary`, body with `### What`, `### Why`, `### How`.
 - `src/engine/`: tax.ts, net.ts, rules.ts, scenario.ts, explain.ts, benefit.ts, types.ts (pure, importable from Node)
 - `src/data/`: strauss-rules.json, catalog.json, occupations.json, employees.json, tax-seed.json (bundled at build time)
 - `src/agent/`: llm.ts, loop.ts, tools.ts, guard.ts, prompt.ts, extract.ts, types.ts
@@ -51,10 +53,12 @@ Actual layout (verified 2026-10-13):
 
 ## Known pitfalls
 
-- `server.ts` uses `dotenv.config()`, which reads only `.env` (not `.env.local`).
-- `.env.example` was committed with real-looking keys. Never put values there. Never open or print `.env`.
-- `.gitignore` currently ignores `docs/`, `CLAUDE.md`, `data/`, so these are not versioned.
-- The agent gets a profile snapshot: tools in the same turn see stale data (`EmployeeView.tsx:204-248`).
+- `server.ts` uses `dotenv.config()`, which reads only `.env` (not `.env.local`). `npm run dev` does not reload `server.ts` or `.env`: restart it after changing either.
+- `.env.example` must contain variable names only. Old real keys are still in git history (commits cd7cace, 869fb74). Never open or print `.env`; change single lines with sed if asked.
+- `GEMINI_MODEL` is a comma-separated, ordered model list; `generateWithFallback` in `server.ts` falls back on 429/503/404/timeout (`GEMINI_MODEL_TIMEOUT_MS`). Check real model names at https://generativelanguage.googleapis.com/v1beta/models before using one (`gemini-2.5-*`, `gemini-pro` return 404; there is no `gemini-3.8-flash-lite`).
+- Tool calls must go to Gemini as functionCall/functionResponse with the raw model content (thought signatures) passed back unchanged. Plain-text tool results make weak models print "[קריאה לכלי …]". Fixed on branch `agent` (`b30f4a0`), not yet in `main`.
+- A full agent turn with flash-lite takes about 26s; the turn limit in `loop.ts` is 30s.
+- Supabase: tables need GRANT to anon; `SupabaseAdapter` inserts messages without ensuring a `sessions` row, which causes 409 (FK).
 - `buildScenario` has no real `keep` branch: it picks the first car of the group.
 - `findCarByIdOrName('COROLLA CROSS')` returns COROLLA (includes-match before exact match).
 - `csvParser.ts` column detection uses `includes`: "קוד תוצר" is taken as the name and "סוג דלק" as the drive.
