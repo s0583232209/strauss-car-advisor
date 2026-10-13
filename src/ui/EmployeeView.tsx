@@ -82,6 +82,14 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Latest values for async callbacks (agent turn, chips) that would otherwise see stale closures
+  const profileRef = useRef(profile);
+  const lastComparisonRef = useRef(lastComparison);
+  const messagesRef = useRef(messages);
+  profileRef.current = profile;
+  lastComparisonRef.current = lastComparison;
+  messagesRef.current = messages;
+
   // Load state from StorageAdapter on mount
   useEffect(() => {
     async function loadInitial() {
@@ -182,7 +190,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   }, [messages, isTyping]);
 
   // Handle user send message
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = async (
+    textToSend?: string,
+    override?: { profile?: EmployeeProfile; messages?: ChatMessage[] }
+  ) => {
     const text = (textToSend || inputValue).trim();
     if (!text || isTyping) return;
 
@@ -194,37 +205,45 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
       timestamp: Date.now(),
     };
 
-    const newMessages = [...messages, userMsg];
+    const newMessages = [...(override?.messages ?? messagesRef.current), userMsg];
+    messagesRef.current = newMessages;
     setMessages(newMessages);
     await storage.addMessage(sessionId, userMsg);
 
     setIsTyping(true);
+
+    // Comparison computed during this turn (attached to the assistant message)
+    let turnComparison: ComparisonResult | undefined;
 
     try {
       const turnResult = await runAgentTurn(
         text,
         newMessages,
         {
-          profile,
-          lastComparison,
+          // Copy: tools mutate the turn profile in place (tools.ts update_profile)
+          profile: { ...(override?.profile ?? profileRef.current) },
+          lastComparison: lastComparisonRef.current,
           repParticipationMode,
           onProfileUpdate: async (updates) => {
-            setProfile((prev) => {
-              const updated = { ...prev, ...updates };
-              storage.saveProfile(sessionId, updated);
-              // If last comparison exists, recompute with updated profile
-              if (lastComparison) {
-                const recomputed = buildScenario(updated, {
-                  type: lastComparison.scenarioType,
-                  targetCarId: lastComparison.targetCar?.id,
-                });
-                setLastComparison(recomputed);
-                storage.saveLastComparison(sessionId, recomputed);
-              }
-              return updated;
-            });
+            const updated = { ...profileRef.current, ...updates };
+            profileRef.current = updated;
+            setProfile(updated);
+            storage.saveProfile(sessionId, updated);
+            // If last comparison exists, recompute with updated profile
+            const prevComparison = lastComparisonRef.current;
+            if (prevComparison) {
+              const recomputed = buildScenario(updated, {
+                type: prevComparison.scenarioType,
+                targetCarId: prevComparison.targetCar?.id,
+              });
+              lastComparisonRef.current = recomputed;
+              setLastComparison(recomputed);
+              storage.saveLastComparison(sessionId, recomputed);
+            }
           },
           onComparisonRun: async (comp) => {
+            turnComparison = comp;
+            lastComparisonRef.current = comp;
             setLastComparison(comp);
             await storage.saveLastComparison(sessionId, comp);
           },
@@ -236,8 +255,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               question,
               summary,
               status: 'open',
-              profile,
-              lastComparison: lastComparison || undefined,
+              profile: profileRef.current,
+              lastComparison: lastComparisonRef.current || undefined,
               transcript: newMessages,
               createdAt: Date.now(),
             };
@@ -253,7 +272,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         id: `ast-${Date.now()}`,
         role: 'assistant',
         content: turnResult.text,
-        comparison: lastComparison || undefined,
+        comparison: turnComparison,
         timestamp: Date.now(),
       };
 
@@ -273,26 +292,33 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   };
 
   // Helper to load sample employee
-  const handleLoadSampleEmployee = async (empId: string) => {
-    const target = (employeesData as any[]).find((e) => e.id === empId);
-    if (!target) return;
+  const handleLoadSampleEmployee = async (
+    empId: string
+  ): Promise<{ profile: EmployeeProfile; messages: ChatMessage[] } | undefined> => {
+    const target = (employeesData as EmployeeProfile[]).find((e) => e.id === empId);
+    if (!target) return undefined;
 
+    profileRef.current = target;
     setProfile(target);
     await storage.saveProfile(sessionId, target);
 
     // Initial baseline comparison
     const initialComp = buildScenario(target, { type: 'keep' as any });
+    lastComparisonRef.current = initialComp;
     setLastComparison(initialComp);
     await storage.saveLastComparison(sessionId, initialComp);
 
     const loadMsg: ChatMessage = {
       id: `sys-${Date.now()}`,
       role: 'system',
-      content: `נטענו בהצלחה נתוני הדוגמה של ${target.name} (${target.occupation}, קבוצה ${target.group}, שכר בסיס ${target.base.toLocaleString()} ₪).`,
+      content: `נטענו בהצלחה נתוני הדוגמה של ${target.name} (${target.occupation}, קבוצה ${target.group}, שכר בסיס ${target.base?.toLocaleString()} ₪).`,
       timestamp: Date.now(),
     };
-    setMessages((prev) => [...prev, loadMsg]);
+    const updatedMessages = [...messagesRef.current, loadMsg];
+    messagesRef.current = updatedMessages;
+    setMessages(updatedMessages);
     await storage.addMessage(sessionId, loadMsg);
+    return { profile: target, messages: updatedMessages };
   };
 
   // Reset conversation
@@ -406,8 +432,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
             <button
               key={idx}
               onClick={async () => {
-                await handleLoadSampleEmployee(chip.empId);
-                handleSendMessage(chip.text);
+                const loaded = await handleLoadSampleEmployee(chip.empId);
+                handleSendMessage(chip.text, loaded);
               }}
               className="text-xs px-2.5 py-1 rounded-md bg-slate-50 hover:bg-[#0E6E8C]/10 hover:text-[#0E6E8C] text-slate-700 border border-slate-200 transition-colors"
             >
@@ -651,7 +677,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                   />
                 ) : (
                   <span className="font-bold text-slate-900 text-sm">
-                    {profile.base ? `${profile.base.toLocaleString()} ₪` : 'חסר'}
+                    {profile.base ? `${profile.base?.toLocaleString()} ₪` : 'חסר'}
                   </span>
                 )}
               </div>
@@ -683,12 +709,12 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               <div className="font-bold text-slate-900">
                 {profile.hasCar
                   ? profile.currentCarName
-                  : `אחזקת רכב: ${profile.currentMaintenance.toLocaleString()} ₪`}
+                  : `אחזקת רכב: ${profile.currentMaintenance?.toLocaleString()} ₪`}
               </div>
               {profile.hasCar && (
                 <div className="text-[11px] text-slate-600 mt-1 flex justify-between">
-                  <span>שווי שימוש: {profile.currentBenefit.toLocaleString()} ₪</span>
-                  <span>השתתפות: {profile.currentParticipation.toLocaleString()} ₪</span>
+                  <span>שווי שימוש: {profile.currentBenefit?.toLocaleString()} ₪</span>
+                  <span>השתתפות: {profile.currentParticipation?.toLocaleString()} ₪</span>
                 </div>
               )}
             </div>

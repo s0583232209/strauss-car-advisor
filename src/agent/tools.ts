@@ -155,6 +155,8 @@ export async function executeTool(
         }
       }
 
+      // Mutate the turn's profile in place so later tools in the same turn see the new values
+      Object.assign(context.profile, updates);
       context.onProfileUpdate(updates);
       const res = { success: true, updated: updates };
       return { result: res, outputTextForGuardrail: JSON.stringify(updates) };
