@@ -25,6 +25,7 @@ import { OPENING_MESSAGE } from '../agent/prompt.ts';
 import employeesData from '../data/employees.json';
 import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
 import { ComparisonResult, EligibilityGroup, EmployeeProfile } from '../engine/types.ts';
+import { applyRepAnswer, findUndeliveredAnswers } from '../store/repAnswer.ts';
 import { ChatMessage, StorageAdapter, SupportTicket } from '../store/types.ts';
 import { ComparisonCard } from './ComparisonCard.tsx';
 import { PayslipModal } from './PayslipModal.tsx';
@@ -124,65 +125,56 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
     loadInitial();
   }, [sessionId, storage]);
 
+  // Ticket ids being delivered right now (polling fires every 2s, delivery is async)
+  const deliveringRef = useRef<Set<string>>(new Set());
+  // Latest handleSendMessage for the ticket subscription below
+  const sendMessageRef = useRef<typeof handleSendMessage | null>(null);
+
   // Subscribe to storage changes (e.g. when rep answers ticket in another tab)
   useEffect(() => {
     const unsubscribe = storage.onTicketsChange(async (tickets) => {
-      // Find answered ticket matching this session
-      const answered = tickets.find(
-        (t) => t.sessionId === sessionId && t.status === 'answered' && t.answer
-      );
+      for (const ticket of findUndeliveredAnswers(tickets, sessionId)) {
+        if (deliveringRef.current.has(ticket.id)) continue;
+        deliveringRef.current.add(ticket.id);
 
-      if (answered && answered.answer) {
-        const repAnswer = answered.answer;
-        // Check if message was already appended
-        const existingRepMsg = messages.find((m) => m.content.includes(`תשובת נציג: ${repAnswer.text}`));
-        if (!existingRepMsg) {
-          const repMsg: ChatMessage = {
-            id: `rep-ans-${Date.now()}`,
-            role: 'rep',
-            content: `תשובת נציג שכר: "${repAnswer.text}" ${
-              repAnswer.effectiveFrom ? `(בתוקף מ-${repAnswer.effectiveFrom})` : ''
-            }`,
-            timestamp: Date.now(),
-          };
+        const delivery = applyRepAnswer(
+          ticket,
+          profileRef.current,
+          lastComparisonRef.current,
+          Date.now()
+        );
+        // Mark as delivered first, so a reload or another poll never shows it twice
+        await storage.saveTicket(delivery.ticket);
 
-          const newMessages = [...messages, repMsg];
-          setMessages(newMessages);
-          await storage.addMessage(sessionId, repMsg);
+        const repMsg: ChatMessage = {
+          id: `rep-ans-${ticket.id}`,
+          role: 'rep',
+          content: delivery.repMessageText,
+          comparison: delivery.comparison,
+          timestamp: Date.now(),
+        };
+        const newMessages = [...messagesRef.current, repMsg];
+        messagesRef.current = newMessages;
+        setMessages(newMessages);
+        await storage.addMessage(sessionId, repMsg);
 
-          // If structured participation value was answered, re-run comparison
-          if (repAnswer.value !== undefined) {
-            const updatedProfile = { ...profile, currentParticipation: repAnswer.value };
-            setProfile(updatedProfile);
-            await storage.saveProfile(sessionId, updatedProfile);
+        if (delivery.comparison) {
+          lastComparisonRef.current = delivery.comparison;
+          setLastComparison(delivery.comparison);
+          await storage.saveLastComparison(sessionId, delivery.comparison);
+        }
 
-            // Re-run scenario if there was a target car
-            if (lastComparison?.targetCar) {
-              const recomputed = buildScenario(updatedProfile, {
-                type: lastComparison.scenarioType,
-                targetCarId: lastComparison.targetCar.id,
-                overrideParticipation: repAnswer.value,
-              });
-              setLastComparison(recomputed);
-              await storage.saveLastComparison(sessionId, recomputed);
-
-              const summaryMsg: ChatMessage = {
-                id: `summary-${Date.now()}`,
-                role: 'assistant',
-                content: `מעולה! עודכנה השתתפות עצמית של ${repAnswer.value} ₪ לפי תשובת הנציג. חישבתי מחדש את ההשוואה המלאה:`,
-                comparison: recomputed,
-                timestamp: Date.now(),
-              };
-              setMessages([...newMessages, summaryMsg]);
-              await storage.addMessage(sessionId, summaryMsg);
-            }
-          }
+        if (delivery.agentNote) {
+          await sendMessageRef.current?.(delivery.agentNote, {
+            messages: newMessages,
+            internal: true,
+          });
         }
       }
     });
 
     return () => unsubscribe();
-  }, [sessionId, storage, messages, profile, lastComparison]);
+  }, [sessionId, storage]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -192,23 +184,27 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   // Handle user send message
   const handleSendMessage = async (
     textToSend?: string,
-    override?: { profile?: EmployeeProfile; messages?: ChatMessage[] }
+    override?: { profile?: EmployeeProfile; messages?: ChatMessage[]; internal?: boolean }
   ) => {
     const text = (textToSend || inputValue).trim();
     if (!text || isTyping) return;
 
-    setInputValue('');
-    const userMsg: ChatMessage = {
-      id: `usr-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: Date.now(),
-    };
+    // Internal system notes (e.g. a rep answer) go to the agent only, not to the chat
+    let newMessages = override?.messages ?? messagesRef.current;
+    if (!override?.internal) {
+      setInputValue('');
+      const userMsg: ChatMessage = {
+        id: `usr-${Date.now()}`,
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+      };
 
-    const newMessages = [...(override?.messages ?? messagesRef.current), userMsg];
-    messagesRef.current = newMessages;
-    setMessages(newMessages);
-    await storage.addMessage(sessionId, userMsg);
+      newMessages = [...newMessages, userMsg];
+      messagesRef.current = newMessages;
+      setMessages(newMessages);
+      await storage.addMessage(sessionId, userMsg);
+    }
 
     setIsTyping(true);
 
@@ -290,6 +286,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
       setIsTyping(false);
     }
   };
+
+  sendMessageRef.current = handleSendMessage;
 
   // Helper to load sample employee
   const handleLoadSampleEmployee = async (
