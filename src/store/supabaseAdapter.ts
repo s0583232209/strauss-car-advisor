@@ -27,7 +27,6 @@ export class SupabaseAdapter implements StorageAdapter {
   private get headers(): Record<string, string> {
     return {
       'apikey': this.supabaseKey,
-      'Authorization': `Bearer ${this.supabaseKey}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=minimal',
     };

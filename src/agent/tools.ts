@@ -14,10 +14,112 @@ import { AgentContext, MissingFieldInfo, ToolDefinition } from './types.ts';
 const carsCatalog = catalogData as Car[];
 const occupationsList = occupationsData as Occupation[];
 
+// "Missing" means not provided: 0 is a valid value (e.g. no commissions, no study fund)
+const isUnset = (v: unknown) => v === undefined || v === null || (typeof v === 'number' && !Number.isFinite(v));
+const isBlank = (v: unknown) => isUnset(v) || String(v).trim() === '';
+
+const HEBREW_NUMBER_WORDS: Record<string, number> = {
+  אחד: 1, אחת: 1, שניים: 2, שתיים: 2, שני: 2, שתי: 2, שלושה: 3, שלוש: 3, ארבעה: 4, ארבע: 4,
+  חמישה: 5, חמש: 5, שישה: 6, שש: 6, שבעה: 7, שבע: 7, שמונה: 8, תשעה: 9, תשע: 9, עשרה: 10, עשר: 10,
+};
+
+/** Numbers the employee actually wrote: digits (18,500 / 2.25 / 6%), "18 אלף" / "18K", Hebrew words up to 10. */
+export function statedNumbers(texts: string[]): Set<number> {
+  const found = new Set<number>();
+  for (const text of texts) {
+    for (const m of text.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(אלף|[kK](?![a-zA-Z]))?/g)) {
+      const n = Number(m[1].replace(/,/g, ''));
+      if (!Number.isFinite(n)) continue;
+      found.add(n);
+      if (m[2]) found.add(Math.round(n * 1000 * 100) / 100);
+    }
+    for (const word of text.split(/[\s,.;:!?()"'״׳-]+/)) {
+      const value = HEBREW_NUMBER_WORDS[word] ?? HEBREW_NUMBER_WORDS[word.replace(/^[והבלש]/, '')];
+      if (value !== undefined) found.add(value);
+    }
+  }
+  return found;
+}
+
+const NUMERIC_PROFILE_FIELDS = [
+  'base',
+  'commissions',
+  'bonus',
+  'pensionPct',
+  'studyFundPct',
+  'creditPoints',
+  'childrenUpTo23',
+  'currentParticipation',
+  'currentBenefit',
+  'currentMaintenance',
+] as const;
+
+const GROUP_MISSING: MissingFieldInfo = {
+  field: 'group',
+  label_he: 'קבוצת זכאות (א–ד)',
+  whyNeeded_he: 'לקביעת תקציב הרכב והרכבים המותרים',
+};
+
+/** Required fields per SPEC section 7. Pure; also used by the UI before calling the engine. */
+export function getMissingFields(
+  prof: Partial<EmployeeProfile>,
+  _scenarioType: ScenarioType | 'general' = 'general' // every scenario needs the same fields today
+): MissingFieldInfo[] {
+  // Order = the order the agent asks: group, base, car today, children, then the rest
+  const missing: MissingFieldInfo[] = [];
+
+  if (isBlank(prof.group)) missing.push(GROUP_MISSING);
+  if (isUnset(prof.base)) {
+    missing.push({ field: 'base', label_he: 'שכר בסיס חודשי', whyNeeded_he: 'לקביעת מדרגות המס וחישוב שכר הנטו' });
+  }
+  if (prof.hasCar === undefined || prof.hasCar === null) {
+    missing.push({ field: 'hasCar', label_he: 'האם יש כיום רכב חברה או ויתור (אחזקה)', whyNeeded_he: 'לקביעת מצב היום שאליו משווים' });
+  }
+  // Always asked (product decision 2026-10-13, SPEC 7), not only for the family track
+  if (isUnset(prof.childrenUpTo23)) {
+    missing.push({ field: 'childrenUpTo23', label_he: 'מספר ילדים עד גיל 23 (0 אם אין)', whyNeeded_he: 'לבדיקת זכאות למסלול ברוכת ילדים' });
+  }
+  if (isBlank(prof.occupation)) {
+    missing.push({ field: 'occupation', label_he: 'עיסוק / תפקיד', whyNeeded_he: 'לקביעת קבוצת הזכאות, חובת רכב ואפשרות ויתור' });
+  }
+  if (isUnset(prof.commissions)) {
+    missing.push({ field: 'commissions', label_he: 'עמלות חודשיות (0 אם אין)', whyNeeded_he: 'חלק מההכנסה החייבת במס' });
+  }
+  if (isUnset(prof.bonus)) {
+    missing.push({ field: 'bonus', label_he: 'בונוס חודשי (0 אם אין)', whyNeeded_he: 'חלק מההכנסה החייבת במס' });
+  }
+  if (isUnset(prof.pensionPct)) {
+    missing.push({ field: 'pensionPct', label_he: 'אחוז הפרשת עובד לפנסיה', whyNeeded_he: 'משפיע על הנטו ועל זיכוי הפנסיה במס' });
+  }
+  if (isUnset(prof.studyFundPct)) {
+    missing.push({ field: 'studyFundPct', label_he: 'אחוז הפרשה לקרן השתלמות (0 אם אין)', whyNeeded_he: 'ניכוי מהשכר שמשפיע על הנטו' });
+  }
+  if (isUnset(prof.creditPoints)) {
+    missing.push({ field: 'creditPoints', label_he: 'נקודות זיכוי במס', whyNeeded_he: 'לחישוב המס לתשלום' });
+  }
+
+  if (prof.hasCar === true) {
+    const carNameMissing = isBlank(prof.currentCarName) || prof.currentCarName === 'רכב חברה נוכחי';
+    if (carNameMissing) {
+      missing.push({ field: 'currentCarName', label_he: 'דגם רכב נוכחי', whyNeeded_he: 'לשליפת שווי השימוש הנוכחי לצורך השוואה מדויקת' });
+    }
+    if (isUnset(prof.currentParticipation)) {
+      missing.push({ field: 'currentParticipation', label_he: 'השתתפות עובד ברכב הנוכחי (0 אם אין)', whyNeeded_he: 'מנוכה מהנטו במצב היום' });
+    }
+    if (!carNameMissing && isUnset(prof.currentBenefit)) {
+      missing.push({ field: 'currentBenefit', label_he: 'שווי שימוש של הרכב הנוכחי', whyNeeded_he: 'הרכב לא נמצא בקטלוג; יש להעביר שאלה לנציג' });
+    }
+  } else if (prof.hasCar === false && isUnset(prof.currentMaintenance)) {
+    missing.push({ field: 'currentMaintenance', label_he: 'דמי אחזקת רכב נוכחיים', whyNeeded_he: 'חלק מהשכר במצב היום (ויתור על רכב)' });
+  }
+
+  return missing;
+}
+
 export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'update_profile',
-    description: 'Update employee salary, role, car, or deduction fields. Only call with values the employee just stated that differ from the card; do not re-send fields already on the card.',
+    description: 'Update employee salary, role, car, or deduction fields. Only call with values the employee just stated that differ from the card; do not re-send fields already on the card. Save ONLY values the employee stated explicitly in this conversation. Never assume, estimate or fill in typical values; if a value was not stated, ask the employee instead. Numbers that do not appear in the employee messages are rejected.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -26,9 +128,9 @@ export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
         occupation: { type: 'string', description: 'Job title / occupation (עיסוק/תפקיד)' },
         commissions: { type: 'number', description: 'Monthly commissions / sales incentives (עמלות)' },
         bonus: { type: 'number', description: 'Monthly bonus component (בונוס)' },
-        pensionPct: { type: 'number', description: 'Employee pension deduction % (אחוז הפרשת עובד לפנסיה, בד"כ 6%)' },
-        studyFundPct: { type: 'number', description: 'Employee study fund deduction % (אחוז הפרשה לקרן השתלמות, בד"כ 2.5%)' },
-        creditPoints: { type: 'number', description: 'Tax credit points (נקודות זיכוי במס, למשל 2.25 או 2.75)' },
+        pensionPct: { type: 'number', description: 'Employee pension deduction % (אחוז הפרשת עובד לפנסיה)' },
+        studyFundPct: { type: 'number', description: 'Employee study fund deduction % (אחוז הפרשה לקרן השתלמות)' },
+        creditPoints: { type: 'number', description: 'Tax credit points (נקודות זיכוי במס)' },
         childrenUpTo23: { type: 'number', description: 'Number of children up to age 23 (מספר ילדים עד גיל 23)' },
         hasCar: { type: 'boolean', description: 'Whether the employee currently has a company car (האם יש כיום רכב חברה)' },
         currentCarName: { type: 'string', description: 'Name/model of current company car (דגם הרכב הנוכחי)' },
@@ -117,6 +219,32 @@ export async function executeTool(
 ): Promise<{ result: any; outputTextForGuardrail: string }> {
   switch (name) {
     case 'update_profile': {
+      // Reject the whole call if any number is negative or not a number (no partial update)
+      const rejected = NUMERIC_PROFILE_FIELDS.filter((f) => args[f] !== undefined)
+        .filter((f) => !Number.isFinite(Number(args[f])) || Number(args[f]) < 0)
+        .map((f) => ({ field: f, value: args[f] }));
+      if (rejected.length > 0) {
+        const res = {
+          success: false,
+          rejected,
+          message: `ערכים לא חוקיים (שליליים או לא מספריים): ${rejected.map((r) => r.field).join(', ')}. הפרופיל לא עודכן; יש לבקש מהעובד ערך תקין.`,
+        };
+        return { result: res, outputTextForGuardrail: JSON.stringify(res) };
+      }
+
+      // Numbers must come from the employee, never from the model ("0" = none is always allowed).
+      // Unstated values are dropped and reported, so the agent asks for them instead.
+      const notSaved: { field: string; value: unknown }[] = [];
+      if (context.userTexts) {
+        const stated = statedNumbers(context.userTexts);
+        args = { ...args };
+        for (const f of NUMERIC_PROFILE_FIELDS) {
+          if (args[f] === undefined || Number(args[f]) === 0 || stated.has(Number(args[f]))) continue;
+          notSaved.push({ field: f, value: args[f] });
+          delete args[f];
+        }
+      }
+
       const updates: Partial<EmployeeProfile> = {};
       if (args.base !== undefined) updates.base = Number(args.base);
       if (args.group !== undefined) updates.group = args.group;
@@ -133,7 +261,7 @@ export async function executeTool(
         const match = findCarByIdOrName(args.currentCarName);
         if (match) {
           updates.currentCarId = match.id;
-          if (updates.currentBenefit === undefined && context.profile.currentBenefit === 0) {
+          if (updates.currentBenefit === undefined && (isUnset(context.profile.currentBenefit) || context.profile.currentBenefit === 0)) {
             updates.currentBenefit = match.benefit;
           }
           if (updates.currentParticipation === undefined && context.profile.currentParticipation === 0) {
@@ -241,7 +369,11 @@ export async function executeTool(
     }
 
     case 'list_options': {
-      const empGroup = context.profile.group || 'ג';
+      const empGroup = context.profile.group;
+      if (isBlank(empGroup)) {
+        const res = { error: 'missing_group', message: 'חסרה קבוצת זכאות', missing: [GROUP_MISSING] };
+        return { result: res, outputTextForGuardrail: '' };
+      }
       const filterType = args.type || 'all';
 
       const eligibleCars = carsCatalog.filter((c) => {
@@ -278,6 +410,17 @@ export async function executeTool(
       const targetCarId = args.targetCarId;
       const overridePart = args.overrideParticipation !== undefined ? Number(args.overrideParticipation) : undefined;
 
+      // Never run the engine on an incomplete profile
+      const missing = getMissingFields(context.profile, scType);
+      if (missing.length > 0) {
+        const res = {
+          status: 'missing_fields',
+          missing,
+          message: `לא ניתן לחשב: חסרים נתונים (${missing.map((m) => m.label_he).join(', ')}). יש לשאול עליהם קודם.`,
+        };
+        return { result: res, outputTextForGuardrail: '' };
+      }
+
       // Demo mode check: "השתתפות ברכב החדש לפי אימות נציג"
       if (context.repParticipationMode && scType !== 'waive_car' && overridePart === undefined) {
         const car = targetCarId ? carsCatalog.find((c) => c.id === targetCarId) : undefined;
@@ -288,7 +431,11 @@ export async function executeTool(
         );
 
         // Calculate baseline today state
-        const baseline = buildScenario(context.profile, { type: 'keep' as any });
+        const baseline: ComparisonResult = {
+          ...buildScenario(context.profile, { type: 'keep' }),
+          requestedScenarioType: scType,
+          requestedCarId: targetCarId,
+        };
         context.onComparisonRun(baseline);
 
         const res = {

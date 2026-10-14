@@ -19,6 +19,7 @@ export interface TicketAnswer {
   value?: number; // e.g. 350
   effectiveFrom?: string; // e.g. "1/1"
   fieldUpdated?: keyof EmployeeProfile | 'participation';
+  deliveredAt?: number; // set when the employee chat has shown this answer
 }
 
 export interface SupportTicket {

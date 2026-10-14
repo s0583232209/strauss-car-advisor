@@ -153,6 +153,10 @@ export interface ScenarioRequest {
 
 export interface ComparisonResult {
   scenarioType: ScenarioType;
+  // What the user actually asked for. Differs from scenarioType when a 'keep'
+  // placeholder is shown while a rep verifies the participation.
+  requestedScenarioType?: ScenarioType;
+  requestedCarId?: string;
   eligible: boolean;
   eligibilityReason_he: string;
   todayState: TaxCalculationInputs;

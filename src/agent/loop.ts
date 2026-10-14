@@ -50,6 +50,9 @@ export async function runAgentTurn(
     ...history.map((h) => h.content),
   ];
 
+  // Profile values may only come from what the employee wrote (not the bot, not tool outputs)
+  context.userTexts = [...history.filter((h) => h.role === 'user').map((h) => h.content), userMessage];
+
   let loopCount = 0;
   const MAX_TOOL_CALLS = 6;
   // Tool calls already executed in this turn (name + args), to block repeat loops
