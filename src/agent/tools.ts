@@ -8,6 +8,7 @@ import occupationsData from '../data/occupations.json';
 import { canSelectCarGroup } from '../engine/rules.ts';
 import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
 import { Car, ComparisonResult, EmployeeProfile, Occupation, ScenarioType } from '../engine/types.ts';
+import { getProfileFieldStatus } from './profileStatus.ts';
 import { AgentContext, MissingFieldInfo, ToolDefinition } from './types.ts';
 
 const carsCatalog = catalogData as Car[];
@@ -16,7 +17,7 @@ const occupationsList = occupationsData as Occupation[];
 export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'update_profile',
-    description: 'Update employee salary, role, car, or deduction fields in their collected profile.',
+    description: 'Update employee salary, role, car, or deduction fields. Only call with values the employee just stated that differ from the card; do not re-send fields already on the card.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -39,7 +40,7 @@ export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'get_missing_fields',
-    description: 'Checks which required fields are still missing from the profile for a given scenario.',
+    description: 'Checks which required fields are still missing for a given scenario, and lists fields already on the employee card (alreadyInCard). Never ask the employee for a field in alreadyInCard.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -155,8 +156,26 @@ export async function executeTool(
         }
       }
 
-      context.onProfileUpdate(updates);
-      const res = { success: true, updated: updates };
+      // Values identical to the card are not updates: report them as already known
+      const alreadyInCard: string[] = [];
+      for (const key of Object.keys(updates) as Array<keyof EmployeeProfile>) {
+        if (updates[key] === context.profile[key]) {
+          alreadyInCard.push(key);
+          delete updates[key];
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        context.onProfileUpdate(updates);
+        // Keep this turn's view of the card current (React state updates are async)
+        context.profile = { ...context.profile, ...updates };
+      }
+      const res = {
+        success: true,
+        updated: updates,
+        alreadyInCard,
+        ...(alreadyInCard.length > 0 ? { note: 'שדות alreadyInCard כבר קיימים בכרטיס עם אותו ערך: אין לשאול או לעדכן אותם שוב.' } : {}),
+      };
       return { result: res, outputTextForGuardrail: JSON.stringify(updates) };
     }
 
@@ -178,7 +197,12 @@ export async function executeTool(
         missing.push({ field: 'childrenUpTo23', label_he: 'מספר ילדים עד גיל 23', whyNeeded_he: 'לבדיקת זכאות למסלול ברוכת ילדים (סף מינימלי: 4 ילדים)' });
       }
 
-      const res = { scenarioType: scType, missing, isComplete: missing.length === 0 };
+      // Fields already on the card: the model must not ask for these
+      const alreadyInCard = getProfileFieldStatus(prof)
+        .filter((f) => f.known)
+        .map((f) => ({ field: f.field, label_he: f.label_he, value: f.value }));
+
+      const res = { scenarioType: scType, missing, isComplete: missing.length === 0, alreadyInCard };
       return { result: res, outputTextForGuardrail: JSON.stringify(res) };
     }
 

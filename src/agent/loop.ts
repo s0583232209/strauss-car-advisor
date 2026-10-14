@@ -5,6 +5,7 @@
 
 import { verifyNumbersInResponse } from './guard.ts';
 import { callLlm, LlmMessage } from './llm.ts';
+import { describeProfileCard } from './profileStatus.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 import { AGENT_TOOLS_DEFINITIONS, executeTool } from './tools.ts';
 import { AgentContext } from './types.ts';
@@ -51,6 +52,8 @@ export async function runAgentTurn(
 
   let loopCount = 0;
   const MAX_TOOL_CALLS = 6;
+  // Tool calls already executed in this turn (name + args), to block repeat loops
+  const executedCalls = new Set<string>();
 
   while (loopCount < MAX_TOOL_CALLS) {
     if (Date.now() - startTime > timeoutMs) {
@@ -61,10 +64,14 @@ export async function runAgentTurn(
 
     loopCount++;
 
+    // Fresh card snapshot every call, so the model sees what is already known
+    const card = describeProfileCard(context.profile);
+    allowedSourcesForGuardrail.push(card);
+
     const response = await callLlm({
       messages: conversation,
       tools: AGENT_TOOLS_DEFINITIONS,
-      systemInstruction: SYSTEM_PROMPT,
+      systemInstruction: `${SYSTEM_PROMPT}\n\n${card}`,
       preferredModel: turnModel,
       onThrottled,
     });
@@ -74,11 +81,19 @@ export async function runAgentTurn(
     if (response.functionCalls && response.functionCalls.length > 0) {
       const responses: Array<{ name: string; id?: string; response: Record<string, unknown> }> = [];
       for (const call of response.functionCalls) {
-        const { result, outputTextForGuardrail } = await executeTool(
-          call.name,
-          call.args,
-          context
-        );
+        const callKey = `${call.name}:${JSON.stringify(call.args ?? {})}`;
+        const isRepeat = executedCalls.has(callKey);
+        executedCalls.add(callKey);
+
+        const { result, outputTextForGuardrail } = isRepeat
+          ? {
+              result: {
+                skipped: true,
+                message: 'הכלי כבר הופעל עם אותם פרמטרים בתשובה זו. אל תפעיל אותו שוב: השתמש בתוצאה הקודמת ובכרטיס העובד וענה למשתמש.',
+              },
+              outputTextForGuardrail: '',
+            }
+          : await executeTool(call.name, call.args, context);
 
         if (outputTextForGuardrail) {
           allowedSourcesForGuardrail.push(outputTextForGuardrail);
