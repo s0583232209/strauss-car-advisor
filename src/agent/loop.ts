@@ -12,6 +12,9 @@ import { AgentContext } from './types.ts';
 /** Text that imitates a tool call ("[קריאה לכלי x]: ..." / "[תוצאת כלי x]: ...") instead of calling it */
 const PSEUDO_TOOL_TEXT = /^\s*\[(קריאה לכלי|תוצאת כלי)\s/;
 
+/** Fallback when the turn ends without a usable answer and there is no comparison card to point to */
+const NO_CARD_FALLBACK = 'סליחה, לא הצלחתי לעבד את התשובה האחרונה. אפשר לכתוב אותה שוב?';
+
 export interface TurnResult {
   text: string;
   isThrottled?: boolean;
@@ -54,11 +57,15 @@ export async function runAgentTurn(
 
   let loopCount = 0;
   const MAX_TOOL_CALLS = 6;
+  // Only mention "the card below" when there is one (from this turn or an earlier one)
+  let hasCard = Boolean(context.lastComparison);
 
   while (loopCount < MAX_TOOL_CALLS) {
     if (Date.now() - startTime > timeoutMs) {
       return {
-        text: 'הבקשה ארכה מעל לזמן המותר (30 שניות). מוצגים נתוני ההשוואה העדכניים שנשמרו עד כה.',
+        text: hasCard
+          ? 'הבקשה ארכה מעל לזמן המותר (30 שניות). מוצגים נתוני ההשוואה העדכניים שנשמרו עד כה.'
+          : 'הבקשה ארכה מעל לזמן המותר (30 שניות). הנתונים שמסרת עד עכשיו נשמרו בפרופיל; אפשר לכתוב את התשובה האחרונה שוב?',
       };
     }
 
@@ -85,6 +92,9 @@ export async function runAgentTurn(
 
         if (outputTextForGuardrail) {
           allowedSourcesForGuardrail.push(outputTextForGuardrail);
+        }
+        if (call.name === 'run_comparison' && ['calculated', 'pending_rep'].includes(result?.status)) {
+          hasCard = true;
         }
 
         // functionResponse.response must be a JSON object
@@ -128,18 +138,20 @@ export async function runAgentTurn(
     if (loopCount < MAX_TOOL_CALLS) {
       conversation.push({
         role: 'user',
-        content: `שים לב: אסור להמציא או לחשב מספרים בעצמך. המספרים ${guardrail.inventedNumbers.join(', ')} לא הופיעו בנתוני המערכת. נסח מחדש בקצרה בלי מספרים מומצאים, או הפנה לכרטיס ההשוואה המופיע מטה.`,
+        content: `שים לב: אסור להמציא או לחשב מספרים בעצמך, וגם לא לתת מספרים לדוגמה. המספרים ${guardrail.inventedNumbers.join(', ')} לא הופיעו בנתוני המערכת. נסח מחדש בקצרה בלי מספרים מומצאים${
+          hasCard ? ', או הפנה לכרטיס ההשוואה המופיע מטה' : ''
+        }.`,
       });
       continue;
     }
 
     // If still failing after regeneration attempts, provide safe fallback
     return {
-      text: 'מצורף למטה כרטיס השוואת השכר המפורט ומדויק על פי נתוני המחשבון:',
+      text: hasCard ? 'מצורף למטה כרטיס השוואת השכר המפורט ומדויק על פי נתוני המחשבון:' : NO_CARD_FALLBACK,
     };
   }
 
   return {
-    text: 'סיימתי את חישוב הנתונים. כרטיס ההשוואה המלא מופיע למטה.',
+    text: hasCard ? 'סיימתי את חישוב הנתונים. כרטיס ההשוואה המלא מופיע למטה.' : NO_CARD_FALLBACK,
   };
 }
