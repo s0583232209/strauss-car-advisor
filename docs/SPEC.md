@@ -1,16 +1,19 @@
-# PROMPT FOR GOOGLE AI STUDIO (Build mode), v2 — "Yoetz HaRechev" (Strauss Car Advisor)
+# SPEC v3 — "Yoetz HaRechev" (Strauss Car Advisor)
 
-You are a senior full-stack engineer with deep experience in payroll/net-salary calculations and LLM agents. Build, in ONE pass, a complete, working, polished web app. No placeholders, no TODOs, no mock logic where real logic is specified. If something is ambiguous, choose the most reasonable option, record it in a visible "Assumptions" panel (Admin screen) and continue.
+Save as `docs/SPEC.md`. Supersedes v2. This is the single source of truth: if code and spec disagree, the spec wins and the gap is reported. Changes from v2 are listed in the Changelog at the end.
+
+Role: senior full-stack engineer with deep experience in payroll/net-salary calculations and LLM agents. Work on the EXISTING code in the repo (do not recreate files or change the folder structure); bring it to this spec: a complete, working, polished web app. No placeholders, no TODOs, no mock logic where real logic is specified. If something is ambiguous, choose the most reasonable option, record it in a visible "Assumptions" panel (Admin screen) and continue.
 
 ## 0. Environment and constraints
 
 - React + TypeScript + Vite + Tailwind (or plain CSS). The calculation engine is a pure TypeScript module (`/engine`) with no React and no LLM dependency. The LLM NEVER computes or invents a number.
-- Gemini via `@google/genai` (key from `process.env.GEMINI_API_KEY`, never hard-coded, never logged). Use the latest Flash model available (default `gemini-2.5-flash`). Function calling for the agent, multimodal input for payslip extraction.
-- Free-tier safety: the free Gemini key has low per-minute and per-day limits. Implement (a) exponential backoff with jitter on HTTP 429/503 (max 4 tries), (b) at most 6 model calls per user turn, (c) an in-memory cache for identical requests, (d) an optional fallback provider (OpenAI-compatible endpoint, configurable via `VITE_FALLBACK_BASE_URL`, `VITE_FALLBACK_KEY`, `VITE_FALLBACK_MODEL`, e.g. OpenRouter or Groq) used automatically after repeated 429s. Show a friendly Hebrew banner when throttled.
-- Persistence through a `StorageAdapter` interface with two implementations: `LocalStorageAdapter` (default; wrap every access in try/catch, in-memory fallback) and `SupabaseAdapter` (used when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` exist; includes Realtime subscription on tickets and messages). Provide the SQL (in a `/supabase/schema.sql` file and shown in Admin): tables `sessions(id, profile jsonb, updated_at)`, `messages(id, session_id, role, content, created_at)`, `tickets(id, session_id, question, summary, status, answer jsonb, created_at, answered_at)`. State MUST survive a page refresh (conversation, profile, tickets, last comparison).
+- **Dependency rule (layers):** data → engine → agent → store → UI (plus the `api/` function). Imports only point downward: the engine imports nothing from React, the agent, the store or the model SDK. The **Profile object (the form) is the source of truth**, not the chat history; the model only proposes updates through `update_profile`. Validate every tool input and the rules/data files with `zod`.
+- Gemini via `@google/genai` (key from `process.env.GEMINI_API_KEY`, never hard-coded, never logged). Use a current Flash model (default `gemini-2.5-flash`; keep the model name in one config constant). Function calling for the agent, multimodal input for payslip extraction.
+- Free-tier safety: the free Gemini key has low per-minute and per-day limits. Implement (a) exponential backoff with jitter on HTTP 429/503 (max 4 tries), (b) at most 6 model calls per user turn (target 2–4: one decision call, one tool-result call, rarely a regeneration), (c) an in-memory cache for identical requests, (d) an optional fallback provider (OpenAI-compatible endpoint, configurable via `VITE_FALLBACK_BASE_URL`, `VITE_FALLBACK_KEY`, `VITE_FALLBACK_MODEL`, e.g. OpenRouter or Groq) used automatically after repeated 429s. Show a friendly Hebrew banner when throttled, and a UI send-throttle (one message at a time; disable send while a turn runs).
+- **Keys stay server-side:** the Gemini key lives only in a serverless function (`api/llm`) read from environment variables; the browser never sees it, and `VITE_*` variables never hold a secret that grants cost or data access (the Supabase anon key is public by design; RLS is OFF in the demo, mandatory in a pilot). Persistence through a `StorageAdapter` interface with two implementations: `LocalStorageAdapter` (default; wrap every access in try/catch, in-memory fallback) and `SupabaseAdapter` (used when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` exist; includes Realtime subscription on tickets and messages). Provide the SQL (in a `/supabase/schema.sql` file and shown in Admin): tables `sessions(id, profile jsonb, updated_at)`, `messages(id, session_id, role, content, created_at)`, `tickets(id, session_id, question, summary, status, answer jsonb, created_at, answered_at)` with `status` in `open | answered | applied | closed` (`applied` = the agent already recomputed with the rep's answer). `SupabaseAdapter` also provides a localStorage fallback if the network fails. The free Supabase project pauses after about a week of inactivity: add the optional keep-alive workflow (`.github/workflows/keepalive.yml`, daily GET with secrets from GitHub Secrets) and say in the README to log in once before the demo. State MUST survive a page refresh (conversation, profile, tickets, last comparison).
 - Large data: the tax-authority CSV (about 78k rows) is parsed in a Web Worker and stored in IndexedDB as a compact index, not in localStorage.
 - All data and rules come from files in `/data`, never hard-coded in logic. Admin can upload replacements (rules JSON, catalog, occupations, employees, tax-authority CSV). A pilot swaps data, not code.
-- UI language Hebrew, RTL (`dir="rtl"`, `lang="he"`), Heebo font with fallback. Money as `1,234 ₪`, explicit signs (`+661 ₪`, `−3,522 ₪`). Code and comments in English.
+- UI language Hebrew, RTL (`dir="rtl"`, `lang="he"`), **self-hosted** Heebo (`@fontsource/heebo`, weights 400/500/700; no requests to Google Fonts) with Arial fallback. Money as `1,234 ₪`, explicit signs (`+661 ₪`, `−3,522 ₪`). Code and comments in English.
 - Privacy: all demo data is fictional. Show a banner on the upload control: "השתמשו רק בטפסי דוגמה מותאמים (פרטים שונו). בגרסה החינמית של ג׳מיני הקלט עשוי לשמש לאימון." Mask ID numbers; never put salary data in console logs.
 
 ## 1. Product
@@ -21,20 +24,20 @@ An employee entitled to a company car asks in free Hebrew, for example "מה י�
 
 1. `#/` Employee: chat + collected-profile panel + comparison card.
 2. `#/rep` Representative screen.
-3. `#/admin` Data, rules, assumptions, calibration tests. `#/guide` static Hebrew guidance page generated from the app's real config (conversation script, rules table, data sources "what exists / what is on the way", what is submitted).
+3. `#/admin` Data, rules, assumptions, calibration tests. `#/guide` (OPTIONAL, build last) static Hebrew guidance page generated from the app's real config (conversation script, rules table, data sources "what exists / what is on the way", what is submitted).
    Top bar: role switcher [עובד | נציג | נתונים ובדיקות | מדריך] and a badge with the open-ticket count.
 
 ### 2.1 Employee
 
 - Chat with typing indicator, quick-reply buttons for closed questions, Enter to send, error states with retry, mobile-friendly (360px), "שיחה חדשה" button.
-- Profile panel ("פרופיל שנאסף"): every field editable in place ("תיקון נתונים"); missing fields highlighted; changing a field recomputes the last comparison.
+- Profile panel ("פרופיל שנאסף"): the eligibility group (א–ד) and the occupation are SEPARATE fields; every field editable in place ("תיקון נתונים"); missing fields highlighted; changing a field recomputes the last comparison.
 - Demo helper: dropdown "טען עובד לדוגמה" (6 sample employees) plus six chips with the six sample questions (section 7), plus a chip "עובדת בקבוצה ב׳ שמוותרת על הרכב" that loads a generic Group-B waiver profile (see 8.3).
 - Paperclip upload (section 6).
 - Toggle "השתתפות ברכב החדש": `לפי ברירת מחדל בקטלוג` (default) | `אימות נציג` (demo mode: when ON, the bot says it is missing the employee's participation in the new car, opens a ticket, shows today's state meanwhile, and recomputes after the rep answers).
 
 ### 2.2 Representative
 
-- Tickets list (פתוחה / נענתה / נסגרה) with filters; details: question, bot summary, employee profile, last comparison, transcript.
+- Tickets list (פתוחה / נענתה / יושמה / נסגרה) with filters; details: question, bot summary, employee profile, last comparison, transcript.
 - Reply form: free text + optional structured fields `value` (number) and `effectiveFrom` (e.g. "1/1"), buttons "שלח תשובה" / "סגור פנייה".
 - On reply, the employee chat (same browser through `storage` event + 2s polling, or Supabase Realtime across devices) shows "תשובת נציג: …" and the agent continues from the same point, re-running the comparison if the answer changes an input (example: rep answers "השתתפות 350 ₪, בתוקף מ-1/1").
 
@@ -74,7 +77,7 @@ Only drive code 3 (electric) qualifies; hybrid/plug-in do not. `grossUpForNet(st
 ### 3.3 Scenario builder and explanation
 
 `buildScenario(profile, request) → {today, alternative, applied[], blocked?}`. Types: `change_car`, `go_electric`, `family_track`, `waive_car`, `keep`. Today = current car (benefit from lookup, participation from profile/catalog) or current waiver (occupation maintenance, no benefit, no participation).
-The total difference is the exact sum of sequential steps, each measured as the change in net after applying it on top of the previous ones, order: (1) benefit change, (2) maintenance change, (3) participation change, (4) family-track gap share, (5) EV refund. Each step: `{key, label_he, deltaNet, explanation_he}`; assert `sum(deltaNet) === net_alt − net_today` (before display rounding) in code and tests. Also produce a two-line plain-Hebrew explanation (e.g. "שווי שימוש 4,070 → 3,130 ₪ · +250 ₪ נטו החזר חשמל (מגולם)").
+The total difference is the exact sum of sequential steps, each measured as the change in net after applying it on top of the previous ones, order: (1) benefit change, (2) maintenance change, (3) participation change, (4) family-track gap share, (5) EV refund. Each step: `{key, label_he, deltaNet, explanation_he}`; assert `sum(deltaNet) === net_alt − net_today` (before display rounding) in code and tests. **Displayed steps** are rounded with the largest-remainder method (`roundStepsToTotal(steps, totalRounded)`): round each step to a whole shekel, then add the difference between the sum of rounded steps and the displayed total (`round(net_alt) − round(net_today)`) to the step with the largest absolute value, so the card always adds up visibly. Also produce a two-line plain-Hebrew explanation (e.g. "שווי שימוש 4,070 → 3,130 ₪ · +250 ₪ נטו החזר חשמל (מגולם)").
 
 ## 4. Data (embed exactly; engine reads it from files)
 
@@ -218,10 +221,10 @@ PDF/JPG/PNG sent as inline base64 to Gemini with `responseMimeType: application/
 
 System prompt (Hebrew, warm, brief, one question at a time): the bot is "יועץ הרכב של שטראוס"; never computes or states a net/benefit number itself; only asks for what `get_missing_fields` says is missing; confirms understood values briefly; max ~6 lines plus the card; does not reveal the raw rules; escalates instead of guessing.
 Conversation script to support: (1) employee states the wish; (2) bot asks eligibility group (א–ד) and monthly base; (3) bot asks other components (commissions, bonuses), deductions (pension %, study fund %, credit points) and whether there is a current company car, offering upload as optional; (4) bot asks current car (make, model, registration year) and participation, then shows the eligible catalog (own group or lower) and the employee chooses; (5) bot verifies eligibility against the table, pulls both benefit values from the DB, runs the engine, adds the 250 ₪ EV refund; (6) if something is missing (e.g. participation in the new car) it says "חסר לי X, שלחתי שאלה לנציג" and shows today's state meanwhile; (7) after the rep answers the process continues from that point with the final comparison, e.g. "היום נטו 11,480 ₪ · עם הרכב החשמלי 11,690 ₪ · הפרש +210 ₪ בחודש. למה? …" (the numbers in this example are illustrative only).
-Tools (executed locally): `update_profile(fields)`, `get_missing_fields(scenarioType)`, `find_car(query)` (fuzzy Hebrew/English: "קורולה קרוס", "אטו", "טסלה", "קרניבל"; ask which one if several; escalate if none), `list_options(type)` (own group or lower, never family cars; `electric` = drive 3), `run_comparison(scenario)`, `escalate_to_rep(question, summary)`.
-Required fields: occupation (→ group, carMandatory, canWaive), base, commissions, bonus, pensionPct, studyFundPct, creditPoints, current car + participation OR current waiver, and children≤23 only for the family track.
+Tools (executed locally): `update_profile(fields)`, `get_missing_fields(scenarioType)`, `find_car(query)` (Fuse.js over make/model/description plus an alias dictionary for all 20 catalog cars, Hebrew and English: "אטו"→ATTO 3, "טסלה" and "מודל 3"→MODEL 3, "הקרניבל"→CARNIVAL, "קורולה קרוס"→COROLLA CROSS; normalize input (lowercase, strip hyphens and commas); several close matches (e.g. "קורולה" vs "קורולה קרוס") → return a list so the bot asks which one; no match → null and escalate), `list_options(type)` (own group or lower, never family cars; `electric` = drive 3), `run_comparison(scenario)`, `escalate_to_rep(question, summary)`.
+Required fields: **eligibility group (א–ד), asked directly and not derived from occupation**; base, commissions, bonus, pensionPct, studyFundPct, creditPoints, current car + participation OR current waiver, children≤23 only for the family track, and **occupation only for the waiver scenario** (needed for carMandatory, canWaive and the maintenance amount; selecting an occupation from the list in a loaded sample employee also fills the group, but the bot never asks for occupation in change_car, go_electric or family_track). `get_missing_fields` is deterministic code, not a model decision.
 Escalate when: car or occupation not in data; benefit value not found; policy question or exception; unclear child data; extraction low confidence; the user asks for a person.
-Guardrails: post-check that every number in the final text exists in this turn's tool outputs or in the user's messages; otherwise regenerate (max 2) and finally show only the card. Tool-loop cap 6, 30s timeout. Reply in Hebrew unless the user writes in another language.
+Guardrails: post-check that every number in the final text exists in this turn's tool outputs or in the user's messages; otherwise regenerate (max 2) and finally show only the card. Guard rules: extract numbers with a regex and strip thousands separators; accept rounded variants of tool values from the same turn (11,692.82 ⇒ "11,693"); ignore dates (like 1/1), years (1990–2100), list numbers and bare numbers below 10 not attached to ₪ or %; check only values written with ₪/% or ≥ 10. Tool-loop cap 6, 30s timeout. Reply in Hebrew unless the user writes in another language.
 Opening message: "היי, אני יועץ הרכב. אפשר לשאול אותי מה יקרה לנטו אם תעברו לרכב חשמלי, תחליפו רכב, תוותרו על הרכב או תבחרו במסלול ברוכת ילדים. נתחיל מהשכר: באיזו קבוצת זכאות (א–ד) אתם ומה שכר הבסיס החודשי?"
 Sample questions (chips): (1) "אם אעבור מהקורולה קרוס ל-BYD Atto 3 החשמלי - כמה זה ישנה לי בנטו?" (2) "יש לי 5 ילדים. אם אקח קרניבל במסלול ברוכת ילדים - מה יקרה לנטו?" (3) "היום אני מקבלת אחזקת רכב. אם אקח MG4 חשמלי - כמה אפסיד או ארוויח בנטו?" (4) "אם אחליף את הטוסון ב-EV3 - מה ההפרש בנטו?" (5) "אם אוותר על הרכב ואקבל אחזקה - כמה אקבל בנטו?" (6) "אם אעבור מהאוקטביה לטסלה מודל 3 - מה יקרה לנטו?"
 
@@ -242,7 +245,13 @@ These values come from the official workbook sheet "חישובים" and were rep
 
 ### 8.2 Rule assertions
 
+NI+health unit constants: `niHealth(7522) = 321.1894` (7,522 × 0.0427) and `niHealth(10000) = 622.762` (321.1894 + 2,478 × 0.1217). Use `toBeCloseTo(x, 2)` for money comparisons.
+
 Delta steps sum exactly to the total; EV gross-up returns exactly +250 net; hybrid and plug-in get no refund; mandatory-car occupation cannot waive; family track needs ≥4 children up to 23 (David 5 ✓, Noa 2 ✗); a car above the employee's group is rejected; family cars are not selectable outside the family track; the family-gap example (budget 3,500, cost 6,000 → 1,250/1,250); CSV lookup with the vehicle-type code returns 3,130 for ATTO 3 and never 6,950; all 20 catalog benefit values equal the CSV values (when loaded).
+
+### 8.4 Additional rule tests
+
+(1) Eli (group ד, 4 children) + SANTA FE in the family track: gap 5,600 − 5,200 = 400, employee share 200. (2) Yossi (3 children) is not eligible for the family track. (3) David and Yossi cannot waive (mandatory-car occupations). (4) SPORTAGE HEV is plug-in per the data: no EV refund, do not infer drive type from the name. (5) A missing CSV key returns `null` and opens a ticket. (6) `get_missing_fields(go_electric)` does not include occupation; `get_missing_fields(waive_car)` does. (7) Displayed rounded steps sum exactly to the displayed total in all six scenarios and in random inputs (fast-check).
 
 ### 8.3 Generic Group-B waiver (required by the brief: it must work for more than the script example)
 
@@ -259,4 +268,12 @@ Clean, light and calm. Background #FAFBFC, ink #1C2733, accent teal #0E6E8C, bor
 - Include: `README.md` (install, env vars, run tests, how to replace data), `.env.example` without secrets (`GEMINI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_FALLBACK_*`), the sample `strauss-rules.json`, and a short `SUMMARY.md` in Hebrew: what works, limitations, what is needed for a pilot at Strauss (real payroll/HR integration, real rules and budgets, official tax tables, security review).
 - When finished, reply with: what was built, assumptions made, and how to run the calibration tests.
 
-Start building now and produce the complete app.
+## Changelog v2 → v3
+
+- Required fields: group asked directly; occupation only for waiver (fixes contradiction with the brief).
+- Added layering/dependency rule, Profile as source of truth, zod validation, server-side key.
+- Ticket status `applied`; Supabase keep-alive; `#/guide` optional.
+- Self-hosted Heebo; Fuse.js + alias dictionary for car lookup; explicit number-guard rules; largest-remainder rounding of displayed steps.
+- Corrected unit constants (niHealth 321.1894 / 622.762) and added tests 8.4.
+
+Work in small verified steps: run `npx vitest run` and `npm run build` after each change.
