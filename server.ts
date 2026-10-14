@@ -26,9 +26,10 @@ const geminiModels = (process.env.GEMINI_MODEL || 'gemini-3.8-flash')
   .split(',')
   .map((m) => m.trim())
   .filter(Boolean);
-const MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS) || 20000;
+// Kept well below the agent's 30s turn limit (src/agent/loop.ts) so a hanging model still leaves time to fall back
+const MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS) || 10000;
 // Skip a model for a while after it fails, so each agent turn does not re-hit an exhausted model
-const COOLDOWN_MS: Record<number, number> = { 429: 60000, 503: 30000, 404: 600000, 408: 30000 };
+const COOLDOWN_MS: Record<number, number> = { 429: 60000, 503: 30000, 404: 600000, 408: 60000 };
 const modelCooldownUntil = new Map<string, number>();
 
 const ai = new GoogleGenAI({
@@ -42,12 +43,17 @@ const ai = new GoogleGenAI({
 
 /** Calls generateContent on the first available model, falling back on 429/503/404/timeout. */
 async function generateWithFallback(
-  params: Omit<Parameters<typeof ai.models.generateContent>[0], 'model'>
+  params: Omit<Parameters<typeof ai.models.generateContent>[0], 'model'>,
+  preferredModel?: string
 ): Promise<{ response: Awaited<ReturnType<typeof ai.models.generateContent>>; model: string }> {
   const now = Date.now();
   const available = geminiModels.filter((m) => (modelCooldownUntil.get(m) || 0) <= now);
   // If every model is cooling down, still try them all rather than failing immediately
-  const candidates = available.length > 0 ? available : geminiModels;
+  let candidates = available.length > 0 ? available : geminiModels;
+  // Within one agent turn keep the model that produced the previous turn (thought signatures are model-specific)
+  if (preferredModel && candidates.includes(preferredModel)) {
+    candidates = [preferredModel, ...candidates.filter((m) => m !== preferredModel)];
+  }
   let lastError: any = null;
 
   for (const model of candidates) {
@@ -95,7 +101,8 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Endpoint: LLM content generation & function calling
 app.post('/api/gemini/generate', async (req: Request, res: Response) => {
   try {
-    const { messages, tools, systemInstruction, responseMimeType, responseSchema, inlineData } = req.body;
+    const { messages, tools, systemInstruction, responseMimeType, responseSchema, inlineData, preferredModel } =
+      req.body;
 
     // Convert tool declarations to GenAI format if provided
     let sdkTools: any[] | undefined = undefined;
@@ -131,10 +138,22 @@ app.post('/api/gemini/generate', async (req: Request, res: Response) => {
       });
     } else if (Array.isArray(messages)) {
       for (const m of messages) {
-        contents.push({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        });
+        if (m.role === 'model_content' && m.content) {
+          // Raw model turn (functionCall parts + thought signatures) passed back unchanged, as Gemini 3 requires
+          contents.push(m.content);
+        } else if (m.role === 'tool_responses' && Array.isArray(m.responses)) {
+          contents.push({
+            role: 'user',
+            parts: m.responses.map((r: any) => ({
+              functionResponse: { name: r.name, ...(r.id ? { id: r.id } : {}), response: r.response },
+            })),
+          });
+        } else {
+          contents.push({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          });
+        }
       }
     }
 
@@ -144,20 +163,27 @@ app.post('/api/gemini/generate', async (req: Request, res: Response) => {
     if (responseMimeType) config.responseMimeType = responseMimeType;
     if (responseSchema) config.responseSchema = responseSchema;
 
-    const { response, model } = await generateWithFallback({
-      contents: contents.length > 0 ? contents : 'שלום',
-      config,
-    });
+    const { response, model } = await generateWithFallback(
+      {
+        contents: contents.length > 0 ? contents : 'שלום',
+        config,
+      },
+      typeof preferredModel === 'string' ? preferredModel : undefined
+    );
 
     // Check for function calls
     const functionCalls = response.functionCalls?.map((fc: any) => ({
       name: fc.name,
       args: fc.args,
+      ...(fc.id ? { id: fc.id } : {}),
     }));
+    const hasCalls = Boolean(functionCalls && functionCalls.length > 0);
 
     res.json({
       text: response.text || '',
-      functionCalls: functionCalls && functionCalls.length > 0 ? functionCalls : undefined,
+      functionCalls: hasCalls ? functionCalls : undefined,
+      // The raw model turn must be sent back with the function responses on the next call
+      modelContent: hasCalls ? response.candidates?.[0]?.content : undefined,
       model,
     });
   } catch (error: any) {

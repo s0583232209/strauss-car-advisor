@@ -51,17 +51,17 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
   const altNet = Math.round(comparison.altBreakdown.net);
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E3E8EE] shadow-sm overflow-hidden my-4">
+    <div className="bg-white rounded-2xl border border-line shadow-sm overflow-hidden my-4">
       {/* Header with Big Number */}
       <div
         className={`p-6 text-center border-b ${
-          isPositive ? 'bg-[#1B8A5A]/5 border-[#1B8A5A]/20' : 'bg-[#C0392B]/5 border-[#C0392B]/20'
+          isPositive ? 'bg-success/5 border-success/20' : 'bg-danger/5 border-danger/20'
         }`}
       >
         <div className="flex items-center justify-center gap-2 mb-1">
           <span
             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-              isPositive ? 'bg-[#1B8A5A]/15 text-[#1B8A5A]' : 'bg-[#C0392B]/15 text-[#C0392B]'
+              isPositive ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
             }`}
           >
             {isPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
@@ -72,30 +72,30 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
         {/* The Memorable Hero Number */}
         <div
           className={`text-5xl sm:text-6xl font-black tracking-tight my-2 ${
-            isPositive ? 'text-[#1B8A5A]' : 'text-[#C0392B]'
+            isPositive ? 'text-success' : 'text-danger'
           }`}
           dir="ltr"
         >
           {diffSign}{absDiffFormatted} ₪
         </div>
 
-        <p className="text-base sm:text-lg font-medium text-[#1C2733]">{impactSentence}</p>
+        <p className="text-base sm:text-lg font-medium text-ink">{impactSentence}</p>
 
         {/* Eligibility badge */}
         <div className="mt-3 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm bg-white/80 border border-slate-200">
           {comparison.eligible ? (
-            <CheckCircle2 className="w-4 h-4 text-[#1B8A5A] shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-[#C0392B] shrink-0" />
+            <AlertCircle className="w-4 h-4 text-danger shrink-0" />
           )}
-          <span className={comparison.eligible ? 'text-slate-700' : 'text-[#C0392B] font-medium'}>
+          <span className={comparison.eligible ? 'text-slate-700' : 'text-danger font-medium'}>
             {comparison.eligibilityReason_he}
           </span>
         </div>
       </div>
 
       {/* Two Columns: Today vs Alternative */}
-      <div className="p-6 border-b border-[#E3E8EE] bg-slate-50/50">
+      <div className="p-6 border-b border-line bg-slate-50/50">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Column Today */}
           <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200">
@@ -103,7 +103,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">המצב היום</span>
               <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">בסיס</span>
             </div>
-            <h4 className="text-base font-bold text-[#1C2733] mb-3">{comparison.todayCarLabel}</h4>
+            <h4 className="text-base font-bold text-ink mb-3">{comparison.todayCarLabel}</h4>
 
             <div className="space-y-2 text-sm text-slate-600">
               <div className="flex justify-between">
@@ -128,7 +128,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
               )}
               <div className="flex justify-between pt-2 border-t border-slate-100">
                 <span className="font-semibold text-slate-800">שכר נטו חודשי:</span>
-                <span className="text-base font-bold text-[#0E6E8C]" dir="ltr">
+                <span className="text-base font-bold text-brand-dark" dir="ltr">
                   {todayNet.toLocaleString()} ₪
                 </span>
               </div>
@@ -136,14 +136,14 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
           </div>
 
           {/* Column Alternative */}
-          <div className="bg-white p-4 sm:p-5 rounded-xl border-2 border-[#0E6E8C]/30 shadow-xs">
+          <div className="bg-white p-4 sm:p-5 rounded-xl border-2 border-brand/30 shadow-xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-              <span className="text-xs font-semibold text-[#0E6E8C] uppercase tracking-wider">החלופה המוצעת</span>
-              <span className="text-xs px-2 py-0.5 rounded bg-[#0E6E8C]/10 text-[#0E6E8C] font-semibold">
+              <span className="text-xs font-semibold text-brand-dark uppercase tracking-wider">החלופה המוצעת</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-brand/10 text-brand-dark font-semibold">
                 השוואה
               </span>
             </div>
-            <h4 className="text-base font-bold text-[#1C2733] mb-3">{comparison.altCarLabel}</h4>
+            <h4 className="text-base font-bold text-ink mb-3">{comparison.altCarLabel}</h4>
 
             <div className="space-y-2 text-sm text-slate-600">
               <div className="flex justify-between">
@@ -159,7 +159,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
                 </span>
               </div>
               {comparison.altState.evGrossUp > 0 && (
-                <div className="flex justify-between text-[#1B8A5A] font-medium">
+                <div className="flex justify-between text-success font-medium">
                   <span>החזר טעינה חשמלית (מגולם):</span>
                   <span>+250 ₪ נטו</span>
                 </div>
@@ -173,7 +173,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
                 </div>
               )}
               {comparison.altState.familyGapShare > 0 && (
-                <div className="flex justify-between text-[#C0392B]">
+                <div className="flex justify-between text-danger">
                   <span>השתתפות עובד בפער מעל תקציב:</span>
                   <span className="font-semibold">
                     {Math.round(comparison.altState.familyGapShare).toLocaleString()} ₪
@@ -182,7 +182,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
               )}
               <div className="flex justify-between pt-2 border-t border-slate-100">
                 <span className="font-semibold text-slate-800">שכר נטו חודשי:</span>
-                <span className="text-base font-bold text-[#0E6E8C]" dir="ltr">
+                <span className="text-base font-bold text-brand-dark" dir="ltr">
                   {altNet.toLocaleString()} ₪
                 </span>
               </div>
@@ -195,7 +195,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
           <div className="font-semibold text-slate-900">{comparison.summary_he[0]}</div>
           <div className="text-slate-600">{comparison.summary_he[1]}</div>
           {comparison.sourceNote && (
-            <div className="text-xs text-[#B4690E] pt-1 flex items-center gap-1">
+            <div className="text-xs text-warning pt-1 flex items-center gap-1">
               <Info className="w-3.5 h-3.5 shrink-0" />
               <span>{comparison.sourceNote}</span>
             </div>
@@ -204,9 +204,9 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
       </div>
 
       {/* "למה?" Delta Steps & Waterfall Chart */}
-      <div className="p-6 border-b border-[#E3E8EE]">
-        <h4 className="text-sm font-bold text-[#1C2733] mb-3 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#0E6E8C]" />
+      <div className="p-6 border-b border-line">
+        <h4 className="text-sm font-bold text-ink mb-3 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-brand-dark" />
           <span>למה? פירוט צעדי ההשפעה על שכר הנטו</span>
         </h4>
 
@@ -228,7 +228,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
                 </div>
                 <span
                   className={`font-bold shrink-0 mr-3 px-2 py-0.5 rounded ${
-                    isPos ? 'bg-[#1B8A5A]/10 text-[#1B8A5A]' : 'bg-[#C0392B]/10 text-[#C0392B]'
+                    isPos ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
                   }`}
                   dir="ltr"
                 >
@@ -241,13 +241,13 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
       </div>
 
       {/* Expandable "איך חישבנו" */}
-      <div className="border-b border-[#E3E8EE]">
+      <div className="border-b border-line">
         <button
           onClick={() => setShowHowCalculated(!showHowCalculated)}
           className="w-full px-6 py-3.5 flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
         >
           <span className="flex items-center gap-2">
-            <HelpCircle className="w-4 h-4 text-[#0E6E8C]" />
+            <HelpCircle className="w-4 h-4 text-brand-dark" />
             <span>איך חישבנו? פירוט מלא של מדרגות המס, ביטוח לאומי ומקורות</span>
           </span>
           {showHowCalculated ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -295,7 +295,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
                   <span>{Math.round(comparison.altBreakdown.niHealth).toLocaleString()} ₪</span>
                 </div>
                 {comparison.altState.evGrossUp > 0 && (
-                  <div className="flex justify-between text-[#1B8A5A]">
+                  <div className="flex justify-between text-success">
                     <span>גילום ברוטו להחזר חשמל:</span>
                     <span>+{Math.round(comparison.altState.evGrossUp).toLocaleString()} ₪ ברוטו</span>
                   </div>
@@ -323,7 +323,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
           {onSelectCarAgain && (
             <button
               onClick={onSelectCarAgain}
-              className="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-[#0E6E8C] text-white hover:bg-[#0B566E] transition-colors flex items-center gap-1.5"
+              className="lift px-3.5 py-2 rounded-full text-xs sm:text-sm font-semibold bg-brand text-white hover:bg-brand-dark transition-colors flex items-center gap-1.5"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>החלף רכב וחשב שוב</span>
@@ -353,7 +353,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
           {onAskRep && (
             <button
               onClick={onAskRep}
-              className="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-[#0E6E8C] border border-[#0E6E8C]/30 hover:bg-[#0E6E8C]/5 transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-brand-dark border border-brand/30 hover:bg-brand/5 transition-colors flex items-center gap-1.5"
             >
               <FileQuestion className="w-3.5 h-3.5" />
               <span>שלח שאלה לנציג</span>

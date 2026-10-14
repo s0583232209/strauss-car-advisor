@@ -26,12 +26,12 @@ export const GuideView: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Header */}
-      <div className="text-center space-y-2 pb-6 border-b border-[#E3E8EE]">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#0E6E8C]/10 text-[#0E6E8C]">
+      <div className="text-center space-y-2 pb-6 border-b border-line">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand/10 text-brand-dark">
           <BookOpen className="w-3.5 h-3.5" />
           <span>מדריך הפעלה ונהלים רשמי</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1C2733]">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink">
           מדריך למשתמש: יועץ הרכב של שטראוס
         </h1>
         <p className="text-sm text-slate-500 max-w-2xl mx-auto">
@@ -40,10 +40,10 @@ export const GuideView: React.FC = () => {
       </div>
 
       {/* Section 1: תסריט השיחה (Conversation Script) */}
-      <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 text-[#0E6E8C]">
+      <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 text-brand-dark">
           <MessageSquare className="w-5 h-5" />
-          <h2 className="text-lg font-bold text-[#1C2733]">1. תסריט השיחה והזרימה עם יועץ הרכב</h2>
+          <h2 className="text-lg font-bold text-ink">1. תסריט השיחה והזרימה עם יועץ הרכב</h2>
         </div>
 
         <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
@@ -53,7 +53,7 @@ export const GuideView: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-[#0E6E8C] text-white flex items-center justify-center text-[10px]">1</span>
+              <span className="w-5 h-5 rounded-full bg-brand text-white flex items-center justify-center text-[10px]">1</span>
               <span>הגדרת רצון העובד:</span>
             </div>
             <p className="text-slate-600">
@@ -63,7 +63,7 @@ export const GuideView: React.FC = () => {
 
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-[#0E6E8C] text-white flex items-center justify-center text-[10px]">2</span>
+              <span className="w-5 h-5 rounded-full bg-brand text-white flex items-center justify-center text-[10px]">2</span>
               <span>קליטת נתוני שכר בסיס וזכאות:</span>
             </div>
             <p className="text-slate-600">
@@ -73,7 +73,7 @@ export const GuideView: React.FC = () => {
 
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-[#0E6E8C] text-white flex items-center justify-center text-[10px]">3</span>
+              <span className="w-5 h-5 rounded-full bg-brand text-white flex items-center justify-center text-[10px]">3</span>
               <span>רכיבי שכר, ניכויים ורכב נוכחי:</span>
             </div>
             <p className="text-slate-600">
@@ -83,7 +83,7 @@ export const GuideView: React.FC = () => {
 
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-[#0E6E8C] text-white flex items-center justify-center text-[10px]">4</span>
+              <span className="w-5 h-5 rounded-full bg-brand text-white flex items-center justify-center text-[10px]">4</span>
               <span>הצגת השוואה או פנייה לנציג:</span>
             </div>
             <p className="text-slate-600">
@@ -94,10 +94,10 @@ export const GuideView: React.FC = () => {
       </div>
 
       {/* Section 2: טבלת כללי המדיניות של שטראוס (Rules Table) */}
-      <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 text-[#0E6E8C]">
+      <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 text-brand-dark">
           <Compass className="w-5 h-5" />
-          <h2 className="text-lg font-bold text-[#1C2733]">2. טבלת כללי המדיניות של שטראוס</h2>
+          <h2 className="text-lg font-bold text-ink">2. טבלת כללי המדיניות של שטראוס</h2>
         </div>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
@@ -143,15 +143,15 @@ export const GuideView: React.FC = () => {
       </div>
 
       {/* Section 3: מקורות הנתונים: מה קיים ומה בדרך */}
-      <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 text-[#0E6E8C]">
+      <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 text-brand-dark">
           <FileSpreadsheet className="w-5 h-5" />
-          <h2 className="text-lg font-bold text-[#1C2733]">3. מקורות הנתונים: מה קיים כעת ומה בדרך לפיילוט</h2>
+          <h2 className="text-lg font-bold text-ink">3. מקורות הנתונים: מה קיים כעת ומה בדרך לפיילוט</h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="p-4 rounded-xl bg-[#1B8A5A]/5 border border-[#1B8A5A]/20 space-y-2">
-            <div className="font-bold text-[#1B8A5A] flex items-center gap-1.5 text-sm">
+          <div className="p-4 rounded-xl bg-success/5 border border-success/20 space-y-2">
+            <div className="font-bold text-success flex items-center gap-1.5 text-sm">
               <CheckCircle2 className="w-4 h-4" />
               <span>מה קיים ועובד כעת במערכת:</span>
             </div>
@@ -164,8 +164,8 @@ export const GuideView: React.FC = () => {
             </ul>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#0E6E8C]/5 border border-[#0E6E8C]/20 space-y-2">
-            <div className="font-bold text-[#0E6E8C] flex items-center gap-1.5 text-sm">
+          <div className="p-4 rounded-xl bg-brand/5 border border-brand/20 space-y-2">
+            <div className="font-bold text-brand-dark flex items-center gap-1.5 text-sm">
               <Clock className="w-4 h-4" />
               <span>מה שנדרש להשלמת הפיילוט המלא:</span>
             </div>
@@ -180,10 +180,10 @@ export const GuideView: React.FC = () => {
       </div>
 
       {/* Section 4: מה מוגש ומאושר */}
-      <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-3 text-xs sm:text-sm text-slate-700">
-        <div className="flex items-center gap-2 text-[#0E6E8C]">
+      <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-3 text-xs sm:text-sm text-slate-700">
+        <div className="flex items-center gap-2 text-brand-dark">
           <FileCheck2 className="w-5 h-5" />
-          <h2 className="text-lg font-bold text-[#1C2733]">4. אישור תוצאות ותוקף החישוב</h2>
+          <h2 className="text-lg font-bold text-ink">4. אישור תוצאות ותוקף החישוב</h2>
         </div>
         <p className="leading-relaxed">
           החישובים המופקים ביועץ הרכב הם אינדיקטיביים ומבוססים על נתוני השכר שהוזנו והלוחות הרשמיים.

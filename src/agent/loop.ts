@@ -4,10 +4,13 @@
  */
 
 import { verifyNumbersInResponse } from './guard.ts';
-import { callLlm } from './llm.ts';
+import { callLlm, LlmMessage } from './llm.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 import { AGENT_TOOLS_DEFINITIONS, executeTool } from './tools.ts';
 import { AgentContext } from './types.ts';
+
+/** Text that imitates a tool call ("[קריאה לכלי x]: ..." / "[תוצאת כלי x]: ...") instead of calling it */
+const PSEUDO_TOOL_TEXT = /^\s*\[(קריאה לכלי|תוצאת כלי)\s/;
 
 export interface TurnResult {
   text: string;
@@ -27,18 +30,27 @@ export async function runAgentTurn(
   const timeoutMs = 30000;
   const startTime = Date.now();
 
-  const conversation = [
-    ...history.slice(-10).map((h) => ({
-      role: h.role === 'assistant' ? 'assistant' : 'user',
-      content: h.content,
-    })),
+  const conversation: LlmMessage[] = [
+    ...history
+      .slice(-10)
+      // Drop pseudo tool-call text saved by older versions; it teaches the model to imitate it
+      .filter((h) => !PSEUDO_TOOL_TEXT.test(h.content))
+      .map((h): LlmMessage => ({
+        role: h.role === 'assistant' ? 'assistant' : 'user',
+        content: h.content,
+      })),
     { role: 'user', content: userMessage },
   ];
+  // Model that answered the previous call in this turn (thought signatures are model-specific)
+  let turnModel: string | undefined;
 
   const allowedSourcesForGuardrail: string[] = [
     userMessage,
     ...history.map((h) => h.content),
   ];
+
+  // Profile values may only come from what the employee wrote (not the bot, not tool outputs)
+  context.userTexts = [...history.filter((h) => h.role === 'user').map((h) => h.content), userMessage];
 
   let loopCount = 0;
   const MAX_TOOL_CALLS = 6;
@@ -56,11 +68,14 @@ export async function runAgentTurn(
       messages: conversation,
       tools: AGENT_TOOLS_DEFINITIONS,
       systemInstruction: SYSTEM_PROMPT,
+      preferredModel: turnModel,
       onThrottled,
     });
+    if (response.model) turnModel = response.model;
 
-    // Handle function calls
+    // Handle function calls: send them back as real functionCall / functionResponse turns
     if (response.functionCalls && response.functionCalls.length > 0) {
+      const responses: Array<{ name: string; id?: string; response: Record<string, unknown> }> = [];
       for (const call of response.functionCalls) {
         const { result, outputTextForGuardrail } = await executeTool(
           call.name,
@@ -72,21 +87,35 @@ export async function runAgentTurn(
           allowedSourcesForGuardrail.push(outputTextForGuardrail);
         }
 
-        // Add tool interaction to message chain for next model turn
-        conversation.push({
-          role: 'assistant',
-          content: `[קריאה לכלי ${call.name}]: ${JSON.stringify(call.args)}`,
-        });
-        conversation.push({
-          role: 'user',
-          content: `[תוצאת כלי ${call.name}]: ${JSON.stringify(result)}`,
-        });
+        // functionResponse.response must be a JSON object
+        const asObject =
+          result && typeof result === 'object' && !Array.isArray(result) ? result : { result };
+        responses.push({ name: call.name, ...(call.id ? { id: call.id } : {}), response: asObject });
       }
+
+      conversation.push({
+        role: 'model_content',
+        content: response.modelContent ?? {
+          role: 'model',
+          parts: response.functionCalls.map((c) => ({ functionCall: { name: c.name, args: c.args } })),
+        },
+      });
+      conversation.push({ role: 'tool_responses', responses });
       continue;
     }
 
     // Final text returned by model
     const candidateText = response.text || '';
+
+    // The model wrote a tool call as text instead of calling the tool: ask again
+    if (PSEUDO_TOOL_TEXT.test(candidateText) && loopCount < MAX_TOOL_CALLS) {
+      conversation.push({ role: 'assistant', content: candidateText });
+      conversation.push({
+        role: 'user',
+        content: 'אל תכתוב קריאה לכלי כטקסט. אם צריך כלי, הפעל אותו באמת; אחרת ענה למשתמש בעברית.',
+      });
+      continue;
+    }
 
     // Run guardrail verification on numbers
     const guardrail = verifyNumbersInResponse(candidateText, allowedSourcesForGuardrail);

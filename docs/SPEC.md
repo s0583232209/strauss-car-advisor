@@ -203,7 +203,7 @@ Mandatory-car occupations cannot waive: block with an explanation and offer alte
 | E-005 | מיכל אברהם | מנהל/ת פיתוח       | ג     | 27000 | 0     | 0     | 7         | 2.5          | 2.75       | 1           | MAZDA 3, 350                     |
 | E-006 | אלי שמעון  | מנהל/ת מחלקה       | ד     | 32000 | 0     | 2000  | 6         | 2.5          | 2.25       | 4           | OCTAVIA, 500                     |
 
-For a new (non-sample) employee, ask "כמה ילדים עד גיל 23" only when the family track is relevant.
+For a new (non-sample) employee, always ask "כמה ילדים עד גיל 23" (changed 2026-10-13; previously only for the family track). Sample employees are for dry runs only; a real conversation starts with an empty profile.
 
 ## 5. Comparison card (understood in one second)
 

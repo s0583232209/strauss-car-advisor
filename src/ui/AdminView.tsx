@@ -143,11 +143,11 @@ export const AdminView: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Admin Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E3E8EE] mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-[#1C2733]">ניהול נתונים, כללים ובדיקות כיול</h2>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0E6E8C]/10 text-[#0E6E8C]">
+            <h2 className="text-xl font-bold text-ink">ניהול נתונים, כללים ובדיקות כיול</h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand/10 text-brand-dark">
               Admin Panel
             </span>
           </div>
@@ -162,7 +162,7 @@ export const AdminView: React.FC = () => {
             <span className="text-slate-500">סטטוס כיול:</span>
             <span
               className={`font-bold flex items-center gap-1 ${
-                calibrationData.failed === 0 ? 'text-[#1B8A5A]' : 'text-[#C0392B]'
+                calibrationData.failed === 0 ? 'text-success' : 'text-danger'
               }`}
             >
               {calibrationData.failed === 0 ? (
@@ -185,9 +185,9 @@ export const AdminView: React.FC = () => {
       <div className="flex items-center gap-1 overflow-x-auto pb-2 border-b border-slate-200 mb-6 text-xs font-semibold">
         <button
           onClick={() => setActiveTab('calibration')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
             activeTab === 'calibration'
-              ? 'bg-[#0E6E8C] text-white'
+              ? 'bg-brand text-white'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -197,8 +197,8 @@ export const AdminView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('rules')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'rules' ? 'bg-[#0E6E8C] text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'rules' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <FileJson className="w-4 h-4" />
@@ -207,8 +207,8 @@ export const AdminView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('catalog')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'catalog' ? 'bg-[#0E6E8C] text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'catalog' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <CarIcon className="w-4 h-4" />
@@ -217,8 +217,8 @@ export const AdminView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('occupations')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'occupations' ? 'bg-[#0E6E8C] text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'occupations' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Briefcase className="w-4 h-4" />
@@ -227,8 +227,8 @@ export const AdminView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('employees')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'employees' ? 'bg-[#0E6E8C] text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'employees' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Users className="w-4 h-4" />
@@ -237,8 +237,8 @@ export const AdminView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('tax')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'tax' ? 'bg-[#0E6E8C] text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'tax' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Sliders className="w-4 h-4" />
@@ -247,8 +247,8 @@ export const AdminView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('db')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'db' ? 'bg-[#0E6E8C] text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'db' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Database className="w-4 h-4" />
@@ -257,8 +257,8 @@ export const AdminView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('assumptions')}
-          className={`px-3.5 py-2 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'assumptions' ? 'bg-[#0E6E8C] text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'assumptions' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Info className="w-4 h-4" />
@@ -268,10 +268,10 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 1: Calibration Tests */}
       {activeTab === 'calibration' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-[#1C2733]">בדיקות כיול מקיפות (סעיף 8)</h3>
+              <h3 className="text-base font-bold text-ink">בדיקות כיול מקיפות (סעיף 8)</h3>
               <p className="text-xs text-slate-500">
                 אימות כל תוצאות הנטו, המס, ביטוח לאומי וגילום החשמל של 6 עובדי הדוגמה בדיוק של ±1 ₪
               </p>
@@ -280,7 +280,7 @@ export const AdminView: React.FC = () => {
             <button
               onClick={runTests}
               disabled={isRunningTests}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0E6E8C] text-white hover:bg-[#0B566E] transition-colors flex items-center gap-1.5 shrink-0"
+              className="lift px-4 py-2 rounded-full text-xs font-bold bg-brand text-white hover:bg-brand-dark transition-colors flex items-center gap-1.5 shrink-0"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRunningTests ? 'animate-spin' : ''}`} />
               <span>הרץ בדיקות כיול עכשיו</span>
@@ -304,16 +304,16 @@ export const AdminView: React.FC = () => {
                   {calibrationData.results.map((res, idx) => (
                     <tr
                       key={idx}
-                      className={res.passed ? 'hover:bg-slate-50' : 'bg-[#C0392B]/5 hover:bg-[#C0392B]/10'}
+                      className={res.passed ? 'hover:bg-slate-50' : 'bg-danger/5 hover:bg-danger/10'}
                     >
                       <td className="p-3">
                         {res.passed ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-[#1B8A5A]/10 text-[#1B8A5A]">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-success/10 text-success">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>עבר</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-[#C0392B]/10 text-[#C0392B]">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger">
                             <XCircle className="w-3.5 h-3.5" />
                             <span>נכשל</span>
                           </span>
@@ -347,10 +347,10 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 2: Rules JSON */}
       {activeTab === 'rules' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-[#1C2733]">קובץ כללים ותקציבים (strauss-rules.json)</h3>
+              <h3 className="text-base font-bold text-ink">קובץ כללים ותקציבים (strauss-rules.json)</h3>
               <p className="text-xs text-slate-500">עריכה ישירה של נתוני התקציב, מדרגות המס וכללי הזכאות</p>
             </div>
             <div className="flex items-center gap-2">
@@ -362,7 +362,7 @@ export const AdminView: React.FC = () => {
               </button>
               <button
                 onClick={handleSaveRules}
-                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#0E6E8C] text-white hover:bg-[#0B566E]"
+                className="lift px-4 py-1.5 rounded-full text-xs font-bold bg-brand text-white hover:bg-brand-dark"
               >
                 שמור והחל שינויים
               </button>
@@ -370,7 +370,7 @@ export const AdminView: React.FC = () => {
           </div>
 
           {rulesSavedMsg && (
-            <div className="p-3 rounded-lg bg-[#1B8A5A]/10 text-[#1B8A5A] text-xs font-bold">
+            <div className="p-3 rounded-lg bg-success/10 text-success text-xs font-bold">
               {rulesSavedMsg}
             </div>
           )}
@@ -387,10 +387,10 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 3: Catalog (20 cars) */}
       {activeTab === 'catalog' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-[#1C2733]">קטלוג הרכבים של שטראוס (20 כלי רכב)</h3>
+              <h3 className="text-base font-bold text-ink">קטלוג הרכבים של שטראוס (20 כלי רכב)</h3>
               <p className="text-xs text-slate-500">
                 רכבי קבוצות א–ד + רכבי מסלול ברוכת ילדים (CARNIVAL, SANTA FE)
               </p>
@@ -416,7 +416,7 @@ export const AdminView: React.FC = () => {
               <tbody className="divide-y divide-slate-100 font-medium">
                 {(catalogData as Car[]).map((car) => (
                   <tr key={car.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-bold text-[#0E6E8C]">{car.id}</td>
+                    <td className="p-3 font-bold text-brand-dark">{car.id}</td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded bg-slate-100 font-bold text-slate-800">
                         {car.group}
@@ -433,9 +433,9 @@ export const AdminView: React.FC = () => {
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           car.driveCode === 3
-                            ? 'bg-[#1B8A5A]/15 text-[#1B8A5A]'
+                            ? 'bg-success/15 text-success'
                             : car.driveCode === 1
-                            ? 'bg-[#0E6E8C]/15 text-[#0E6E8C]'
+                            ? 'bg-brand/15 text-brand-dark'
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
@@ -456,10 +456,10 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 4: Occupations (14 roles) */}
       {activeTab === 'occupations' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-[#1C2733]">טבלת עיסוקים, רכב חובה ודמי אחזקה (14 עיסוקים)</h3>
+              <h3 className="text-base font-bold text-ink">טבלת עיסוקים, רכב חובה ודמי אחזקה (14 עיסוקים)</h3>
               <p className="text-xs text-slate-500">עיסוקים שבהם רכב חובה אינם רשאים לוותר על הרכב כנגד אחזקה</p>
             </div>
           </div>
@@ -479,11 +479,11 @@ export const AdminView: React.FC = () => {
                 {(occupationsData as Occupation[]).map((occ, idx) => (
                   <tr key={idx} className="hover:bg-slate-50">
                     <td className="p-3 font-bold text-slate-900">{occ.occupation}</td>
-                    <td className="p-3 font-bold text-[#0E6E8C]">קבוצה {occ.group}</td>
+                    <td className="p-3 font-bold text-brand-dark">קבוצה {occ.group}</td>
                     <td className="p-3">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          occ.carMandatory ? 'bg-[#C0392B]/10 text-[#C0392B]' : 'bg-slate-100 text-slate-600'
+                          occ.carMandatory ? 'bg-danger/10 text-danger' : 'bg-slate-100 text-slate-600'
                         }`}
                       >
                         {occ.carMandatory ? 'כן (חובה)' : 'לא'}
@@ -492,7 +492,7 @@ export const AdminView: React.FC = () => {
                     <td className="p-3">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          occ.canWaive ? 'bg-[#1B8A5A]/10 text-[#1B8A5A]' : 'bg-slate-100 text-slate-400'
+                          occ.canWaive ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-400'
                         }`}
                       >
                         {occ.canWaive ? 'כן (ניתן לוותר)' : 'חסום'}
@@ -511,10 +511,10 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 5: Employees */}
       {activeTab === 'employees' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-[#1C2733]">עובדי דוגמה לכיול ובדיקות (6 פרופילים)</h3>
+              <h3 className="text-base font-bold text-ink">עובדי דוגמה לכיול ובדיקות (6 פרופילים)</h3>
               <p className="text-xs text-slate-500">פרופילים רשמיים מחוברת הכיול (שמות ופרטים פיקטיביים)</p>
             </div>
           </div>
@@ -538,7 +538,7 @@ export const AdminView: React.FC = () => {
               <tbody className="divide-y divide-slate-100 font-medium">
                 {(employeesData as any[]).map((emp) => (
                   <tr key={emp.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-bold text-[#0E6E8C]">{emp.id}</td>
+                    <td className="p-3 font-bold text-brand-dark">{emp.id}</td>
                     <td className="p-3 font-bold text-slate-900">{emp.name}</td>
                     <td className="p-3 text-slate-700">{emp.occupation}</td>
                     <td className="p-3 font-bold">קבוצה {emp.group}</td>
@@ -560,9 +560,9 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 6: Tax Tables */}
       {activeTab === 'tax' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-6">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-6">
           <div>
-            <h3 className="text-base font-bold text-[#1C2733]">לוחות מס הכנסה וביטוח לאומי לשנת 2025</h3>
+            <h3 className="text-base font-bold text-ink">לוחות מס הכנסה וביטוח לאומי לשנת 2025</h3>
             <p className="text-xs text-slate-500">מחושבים על בסיס חודשי על פי נתוני rules.netMethod</p>
           </div>
 
@@ -576,7 +576,7 @@ export const AdminView: React.FC = () => {
                     <span>
                       מדרגה {idx + 1}: {ceiling === null ? 'מעל המדרגה הקודמת' : `עד ${ceiling.toLocaleString()} ₪`}
                     </span>
-                    <span className="font-bold text-[#0E6E8C]">{(rate * 100).toFixed(0)}%</span>
+                    <span className="font-bold text-brand-dark">{(rate * 100).toFixed(0)}%</span>
                   </div>
                 ))}
               </div>
@@ -591,19 +591,19 @@ export const AdminView: React.FC = () => {
               <div className="space-y-2 font-mono">
                 <div className="p-2 rounded bg-white border border-slate-100 flex justify-between">
                   <span>שיעור מופחת (עד 7,522 ₪):</span>
-                  <span className="font-bold text-[#0E6E8C]">
+                  <span className="font-bold text-brand-dark">
                     {((currentRules.netMethod.nationalInsurance.lowRate + currentRules.netMethod.health.lowRate) * 100).toFixed(2)}%
                   </span>
                 </div>
                 <div className="p-2 rounded bg-white border border-slate-100 flex justify-between">
                   <span>שיעור מלא (עד 50,695 ₪):</span>
-                  <span className="font-bold text-[#0E6E8C]">
+                  <span className="font-bold text-brand-dark">
                     {((currentRules.netMethod.nationalInsurance.highRate + currentRules.netMethod.health.highRate) * 100).toFixed(2)}%
                   </span>
                 </div>
                 <div className="p-2 rounded bg-white border border-slate-100 flex justify-between">
                   <span>זיכוי מס פנסיוני (סעיף 45א):</span>
-                  <span className="font-bold text-[#0E6E8C]">
+                  <span className="font-bold text-brand-dark">
                     {(currentRules.netMethod.pensionCredit.rate * 100).toFixed(0)}% עד 7% מתקרה של {currentRules.netMethod.pensionCredit.incomeCeiling.toLocaleString()} ₪
                   </span>
                 </div>
@@ -618,9 +618,9 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 7: Vehicle Benefit DB */}
       {activeTab === 'db' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-6">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-6">
           <div>
-            <h3 className="text-base font-bold text-[#1C2733]">מאגר שווי שימוש ברכב (רשות המסים - הקובץ המורחב)</h3>
+            <h3 className="text-base font-bold text-ink">מאגר שווי שימוש ברכב (רשות המסים - הקובץ המורחב)</h3>
             <p className="text-xs text-slate-500">
               טעינת קובץ CSV רשמי של רשות המסים (כ-78,000 שורות בקידוד windows-1255) הנשמר ב-IndexedDB כאינדקס קומפקטי
             </p>
@@ -629,7 +629,7 @@ export const AdminView: React.FC = () => {
           {/* Important Technical Notes */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
             <div className="font-bold text-slate-900 flex items-center gap-1.5">
-              <Info className="w-4 h-4 text-[#0E6E8C]" />
+              <Info className="w-4 h-4 text-brand-dark" />
               <span>הנחיות טכניות מתוך ניתוח הקובץ האמיתי של רשות המסים:</span>
             </div>
             <ul className="list-disc list-inside space-y-1 text-slate-600">
@@ -656,7 +656,7 @@ export const AdminView: React.FC = () => {
             {/* Upload Area */}
             <div className="p-4 rounded-xl border border-slate-200 space-y-3">
               <span className="font-bold text-slate-800 block">העלאת קובץ CSV רשות המסים:</span>
-              <label className="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-[#0E6E8C] transition-colors">
+              <label className="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-brand transition-colors">
                 <Upload className="w-6 h-6 text-slate-400 mb-1" />
                 <span className="font-semibold text-slate-700">בחרו קובץ CSV להעלאה</span>
                 <span className="text-[11px] text-slate-500">קידוד windows-1255 או UTF-8</span>
@@ -668,7 +668,7 @@ export const AdminView: React.FC = () => {
                   <div>{csvUploadStatus}</div>
                   {csvProgress > 0 && csvProgress < 100 && (
                     <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1.5">
-                      <div className="bg-[#0E6E8C] h-full" style={{ width: `${csvProgress}%` }}></div>
+                      <div className="bg-brand h-full" style={{ width: `${csvProgress}%` }}></div>
                     </div>
                   )}
                 </div>
@@ -679,7 +679,7 @@ export const AdminView: React.FC = () => {
             <div className="p-4 rounded-xl border border-slate-200 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="font-bold text-slate-800 block mb-1">מצב IndexedDB נוכחי:</span>
-                <div className="text-2xl font-black text-[#0E6E8C]">{taxRowCount.toLocaleString()} רשומות</div>
+                <div className="text-2xl font-black text-brand-dark">{taxRowCount.toLocaleString()} רשומות</div>
                 <div className="text-slate-500 mt-1">
                   {taxRowCount > 0
                     ? 'מאגר IndexedDB פעיל ומוכן לשליפות מהירות במכשיר.'
@@ -693,7 +693,7 @@ export const AdminView: React.FC = () => {
                     await clearTaxDb();
                     refreshDbCount();
                   }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#C0392B] bg-[#C0392B]/10 hover:bg-[#C0392B]/20 w-fit"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-danger bg-danger/10 hover:bg-danger/20 w-fit"
                 >
                   נקה מאגר IndexedDB
                 </button>
@@ -704,7 +704,7 @@ export const AdminView: React.FC = () => {
           {/* Interactive Lookup Tester */}
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3 text-xs">
             <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-              <Search className="w-4 h-4 text-[#0E6E8C]" />
+              <Search className="w-4 h-4 text-brand-dark" />
               <span>בדיקת שליפת שווי שימוש לפי מפתח 4-Tuple:</span>
             </h4>
 
@@ -753,7 +753,7 @@ export const AdminView: React.FC = () => {
             <div className="flex items-center gap-3 pt-1">
               <button
                 onClick={handleRunLookup}
-                className="px-4 py-2 rounded-lg bg-[#0E6E8C] text-white font-bold hover:bg-[#0B566E]"
+                className="px-4 py-2 rounded-full bg-brand text-white font-bold hover:bg-brand-dark"
               >
                 בצע חיפוש שווי שימוש
               </button>
@@ -766,7 +766,7 @@ export const AdminView: React.FC = () => {
                   setLookupModel('00003');
                   handleRunLookup();
                 }}
-                className="text-xs text-[#0E6E8C] hover:underline"
+                className="text-xs text-brand-dark hover:underline"
               >
                 בדוק דוגמת BYD ATTO 3 (סוג 1)
               </button>
@@ -779,7 +779,7 @@ export const AdminView: React.FC = () => {
                   setLookupModel('00003');
                   handleRunLookup();
                 }}
-                className="text-xs text-[#0E6E8C] hover:underline"
+                className="text-xs text-brand-dark hover:underline"
               >
                 בדוק דוגמת BYD TANG (סוג 2)
               </button>
@@ -789,7 +789,7 @@ export const AdminView: React.FC = () => {
               <div className="mt-3 p-3 rounded-lg bg-white border border-slate-200">
                 {lookupResult ? (
                   <div className="space-y-1 font-mono">
-                    <div className="font-bold text-[#1B8A5A] text-sm">
+                    <div className="font-bold text-success text-sm">
                       נמצא! שווי שימוש: {lookupResult.value.toLocaleString()} ₪
                     </div>
                     <div>דגם מסחרי: {lookupResult.commercialName || 'לא צוין'}</div>
@@ -797,7 +797,7 @@ export const AdminView: React.FC = () => {
                     <div>מחיר מחירון: {lookupResult.listPrice.toLocaleString()} ₪</div>
                   </div>
                 ) : (
-                  <div className="text-[#C0392B] font-bold">
+                  <div className="text-danger font-bold">
                     לא נמצאה רשומה תואמת. המערכת תפנה לנציג שכר (לעולם לא תנחש).
                   </div>
                 )}
@@ -809,9 +809,9 @@ export const AdminView: React.FC = () => {
 
       {/* Tab 8: Assumptions */}
       {activeTab === 'assumptions' && (
-        <div className="bg-white rounded-2xl border border-[#E3E8EE] p-6 shadow-xs space-y-4">
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div>
-            <h3 className="text-base font-bold text-[#1C2733]">הנחות יסוד (Assumptions Panel)</h3>
+            <h3 className="text-base font-bold text-ink">הנחות יסוד (Assumptions Panel)</h3>
             <p className="text-xs text-slate-500">
               תיעוד שקוף של כל ההנחות החישוביות והמבניות שנבחרו עבור יועץ הרכב
             </p>
