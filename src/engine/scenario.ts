@@ -5,7 +5,7 @@
 
 import catalogData from '../data/catalog.json';
 import occupationsData from '../data/occupations.json';
-import { buildDeltaSteps, buildPlainHebrewSummary } from './explain.ts';
+import { buildDeltaSteps, buildPlainHebrewSummary, roundStepsToTotal } from './explain.ts';
 import { calculateEVGrossUp, calculateNetBreakdown } from './net.ts';
 import { canSelectCarGroup, getGroupBudget, getRules } from './rules.ts';
 import {
@@ -33,8 +33,9 @@ export function findCarByIdOrName(query: string): Car | undefined {
 }
 
 /** Find occupation info for an employee */
-export function findOccupation(occupationName: string): Occupation | undefined {
-  const clean = occupationName.trim();
+export function findOccupation(occupationName: string | undefined): Occupation | undefined {
+  const clean = (occupationName ?? '').trim();
+  if (!clean) return undefined; // occupation is optional outside waive_car; '' must not match the first row
   return occupationsList.find(
     (o) => o.occupation === clean || clean.includes(o.occupation) || o.occupation.includes(clean)
   );
@@ -210,10 +211,12 @@ export function buildScenario(
   const exactDiff = altBreakdown.net - todayBreakdown.net;
 
   // 5. Delta Steps and Explanations
-  const { steps, sumSteps } =
+  const { steps: exactSteps, sumSteps } =
     request.type === 'keep'
       ? { steps: [], sumSteps: 0 }
       : buildDeltaSteps(todayState, altState);
+  // Displayed (whole-shekel) steps add up exactly to the displayed difference
+  const steps = roundStepsToTotal(exactSteps, diffNet);
 
   // SPEC 3.3: the delta steps must add up to the exact net difference.
   if (Math.abs(sumSteps - exactDiff) > 1e-6) {

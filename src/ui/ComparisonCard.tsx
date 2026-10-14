@@ -216,7 +216,9 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
         {/* Steps List */}
         <div className="space-y-2.5 mt-4">
           {comparison.steps.map((step, idx) => {
-            const isPos = step.deltaNet >= 0;
+            // Rounded steps add up exactly to the difference shown above
+            const shown = step.deltaNetRounded ?? Math.round(step.deltaNet);
+            const isPos = shown >= 0;
             return (
               <div
                 key={idx}
@@ -232,7 +234,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
                   }`}
                   dir="ltr"
                 >
-                  {isPos ? '+' : ''}{Math.round(step.deltaNet).toLocaleString()} ₪
+                  {isPos ? '+' : ''}{shown.toLocaleString()} ₪
                 </span>
               </div>
             );

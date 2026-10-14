@@ -21,11 +21,12 @@ Senior software engineer specializing in payroll calculations and LLM agents. Pr
 
 npm run dev | npx vitest run | npm run build | npx tsx scripts/<file>.ts
 
-Actual commands today (vitest is NOT installed yet, see guide step G.1):
+Actual commands today:
 
 - `npm run dev`: Express + Vite middleware (`tsx server.ts`) at http://127.0.0.1:3000
+- `npx vitest run`: unit tests in `tests/*.test.ts` (vitest.config.ts; vitest installed 2026-10-14).
 - `npm run build`: `vite build` to `dist/`. `npm run lint`: `tsc --noEmit`
-- `npx tsx tests/reference.check.ts`: independent SPEC 8.1 check. Part A must stay 12/12; part C lists known agent/scenario bugs, so TOTAL must only go up (74/83 on main, 2026-10-13).
+- `npx tsx tests/reference.check.ts`: independent SPEC 8.1 check. Part A must stay 12/12; part C lists known agent/scenario bugs, so TOTAL must only go up (77/83 on kickoff-fixes, 2026-10-14).
 - `tests/vehicles.check.ts` was deleted and not restored; its findings are in docs/AUDIT.md section 3.
 - `http://127.0.0.1:3000/api/health`: shows `hasGeminiKey` and the configured models with their cooldowns.
 - In-app calibration: `src/tests/calibration.test.ts` (Admin tab; not a vitest file).
@@ -63,6 +64,6 @@ Actual layout (verified 2026-10-13, update 2):
 - `findCarByIdOrName('COROLLA CROSS')` returns COROLLA (includes-match before exact match).
 - `csvParser.ts` column detection uses `includes`: "קוד תוצר" is taken as the name and "סוג דלק" as the drive.
 - The engine uses catalog benefit values; the IndexedDB/CSV lookup is not wired into calculations.
-- `guard.ts` replaces thousands commas with spaces, so "11,693" is split into 11 and 693.
+- `guard.ts` checks only numbers with ₪/% or >= 10; allowed = this turn's tool outputs, non-bot messages and profile values. `update_profile` runs every number through `src/agent/normalize.ts` first.
 - Incognito windows do not share localStorage: test employee and rep flows in two normal tabs.
 - EV gross-up is rounded to whole shekels (net +250.05 / +249.89). This is an open SPEC question; ask before changing it.

@@ -8,6 +8,7 @@ import occupationsData from '../data/occupations.json';
 import { canSelectCarGroup } from '../engine/rules.ts';
 import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
 import { Car, ComparisonResult, EmployeeProfile, Occupation, ScenarioType } from '../engine/types.ts';
+import { describeValue, extractNumbers, normalizeField, NumericField } from './normalize.ts';
 import { AgentContext, MissingFieldInfo, ToolDefinition } from './types.ts';
 
 const carsCatalog = catalogData as Car[];
@@ -17,26 +18,10 @@ const occupationsList = occupationsData as Occupation[];
 const isUnset = (v: unknown) => v === undefined || v === null || (typeof v === 'number' && !Number.isFinite(v));
 const isBlank = (v: unknown) => isUnset(v) || String(v).trim() === '';
 
-const HEBREW_NUMBER_WORDS: Record<string, number> = {
-  אחד: 1, אחת: 1, שניים: 2, שתיים: 2, שני: 2, שתי: 2, שלושה: 3, שלוש: 3, ארבעה: 4, ארבע: 4,
-  חמישה: 5, חמש: 5, שישה: 6, שש: 6, שבעה: 7, שבע: 7, שמונה: 8, תשעה: 9, תשע: 9, עשרה: 10, עשר: 10,
-};
-
-/** Numbers the employee actually wrote: digits (18,500 / 2.25 / 6%), "18 אלף" / "18K", Hebrew words up to 10. */
+/** Numbers the employee actually wrote: digits (18,500 / 2.25 / 6%), "18 אלף וחצי", Hebrew words up to 20. */
 export function statedNumbers(texts: string[]): Set<number> {
   const found = new Set<number>();
-  for (const text of texts) {
-    for (const m of text.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(אלף|[kK](?![a-zA-Z]))?/g)) {
-      const n = Number(m[1].replace(/,/g, ''));
-      if (!Number.isFinite(n)) continue;
-      found.add(n);
-      if (m[2]) found.add(Math.round(n * 1000 * 100) / 100);
-    }
-    for (const word of text.split(/[\s,.;:!?()"'״׳-]+/)) {
-      const value = HEBREW_NUMBER_WORDS[word] ?? HEBREW_NUMBER_WORDS[word.replace(/^[והבלש]/, '')];
-      if (value !== undefined) found.add(value);
-    }
-  }
+  for (const text of texts) for (const n of extractNumbers(text)) found.add(n.value);
   return found;
 }
 
@@ -62,7 +47,7 @@ const GROUP_MISSING: MissingFieldInfo = {
 /** Required fields per SPEC section 7. Pure; also used by the UI before calling the engine. */
 export function getMissingFields(
   prof: Partial<EmployeeProfile>,
-  _scenarioType: ScenarioType | 'general' = 'general' // every scenario needs the same fields today
+  scenarioType: ScenarioType | 'general' = 'general'
 ): MissingFieldInfo[] {
   // Order = the order the agent asks: group, base, car today, children, then the rest
   const missing: MissingFieldInfo[] = [];
@@ -78,8 +63,9 @@ export function getMissingFields(
   if (isUnset(prof.childrenUpTo23)) {
     missing.push({ field: 'childrenUpTo23', label_he: 'מספר ילדים עד גיל 23 (0 אם אין)', whyNeeded_he: 'לבדיקת זכאות למסלול ברוכת ילדים' });
   }
-  if (isBlank(prof.occupation)) {
-    missing.push({ field: 'occupation', label_he: 'עיסוק / תפקיד', whyNeeded_he: 'לקביעת קבוצת הזכאות, חובת רכב ואפשרות ויתור' });
+  // Occupation only matters for a waiver (may waive? maintenance amount); group is asked directly
+  if (scenarioType === 'waive_car' && isBlank(prof.occupation)) {
+    missing.push({ field: 'occupation', label_he: 'עיסוק / תפקיד', whyNeeded_he: 'לבדיקה אם מותר לוותר על הרכב ומהו סכום האחזקה' });
   }
   if (isUnset(prof.commissions)) {
     missing.push({ field: 'commissions', label_he: 'עמלות חודשיות (0 אם אין)', whyNeeded_he: 'חלק מההכנסה החייבת במס' });
@@ -124,7 +110,7 @@ export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
       properties: {
         base: { type: 'number', description: 'Monthly base salary (שכר בסיס חודשי)' },
         group: { type: 'string', description: 'Car eligibility group (קבוצת זכאות: א, ב, ג, ד)' },
-        occupation: { type: 'string', description: 'Job title / occupation (עיסוק/תפקיד)' },
+        occupation: { type: 'string', description: 'Job title / occupation (עיסוק/תפקיד). Needed only for a car waiver; does not set the eligibility group' },
         commissions: { type: 'number', description: 'Monthly commissions / sales incentives (עמלות)' },
         bonus: { type: 'number', description: 'Monthly bonus component (בונוס)' },
         pensionPct: { type: 'number', description: 'Employee pension deduction % (אחוז הפרשת עובד לפנסיה)' },
@@ -218,10 +204,20 @@ export async function executeTool(
 ): Promise<{ result: any; outputTextForGuardrail: string }> {
   switch (name) {
     case 'update_profile': {
+      const rawArgs = args;
+      // Normalize every number first ("6%", "שש אחוז", "0.06", "18 אלף וחצי"); see normalize.ts
+      const normalized: Partial<Record<NumericField, number>> = {};
+      const rejected: { field: string; value: unknown }[] = [];
+      const needsConfirmation: { field: string; value: unknown; question_he: string }[] = [];
+      for (const f of NUMERIC_PROFILE_FIELDS) {
+        if (args[f] === undefined) continue;
+        const r = normalizeField(f, args[f]);
+        if (r.ok) normalized[f] = r.value;
+        else if (!r.ambiguous && r.reason !== 'out_of_range') rejected.push({ field: f, value: args[f] });
+        // Ambiguous or out of range: not saved, the bot asks the employee again
+        else needsConfirmation.push({ field: f, value: args[f], question_he: r.question_he });
+      }
       // Reject the whole call if any number is negative or not a number (no partial update)
-      const rejected = NUMERIC_PROFILE_FIELDS.filter((f) => args[f] !== undefined)
-        .filter((f) => !Number.isFinite(Number(args[f])) || Number(args[f]) < 0)
-        .map((f) => ({ field: f, value: args[f] }));
       if (rejected.length > 0) {
         const res = {
           success: false,
@@ -234,12 +230,21 @@ export async function executeTool(
       // Numbers must come from the employee, never from the model ("0" = none is always allowed).
       // Unstated values are dropped and reported, so the agent asks for them instead.
       const notSaved: { field: string; value: unknown }[] = [];
+      args = { ...args };
+      for (const f of NUMERIC_PROFILE_FIELDS) {
+        if (args[f] === undefined) continue;
+        if (normalized[f] === undefined) delete args[f];
+        else args[f] = normalized[f];
+      }
       if (context.userTexts) {
         const stated = statedNumbers(context.userTexts);
-        args = { ...args };
         for (const f of NUMERIC_PROFILE_FIELDS) {
-          if (args[f] === undefined || Number(args[f]) === 0 || stated.has(Number(args[f]))) continue;
-          notSaved.push({ field: f, value: args[f] });
+          const value = normalized[f];
+          if (value === undefined || value === 0 || stated.has(value)) continue;
+          // The employee may have written the raw form the model passed on ("0.06" → 6%)
+          const raw = typeof rawArgs[f] === 'number' ? rawArgs[f] : extractNumbers(String(rawArgs[f]))[0]?.value;
+          if (raw !== undefined && stated.has(raw)) continue;
+          notSaved.push({ field: f, value: rawArgs[f] });
           delete args[f];
         }
       }
@@ -276,7 +281,6 @@ export async function executeTool(
         updates.occupation = args.occupation;
         const occ = findOccupation(args.occupation);
         if (occ) {
-          if (!updates.group && !context.profile.group) updates.group = occ.group;
           if (!updates.hasCar && occ.canWaive && updates.currentMaintenance === undefined) {
             updates.currentMaintenance = occ.maintenance;
           }
@@ -286,12 +290,21 @@ export async function executeTool(
       // Mutate the turn's profile in place so later tools in the same turn see the new values
       Object.assign(context.profile, updates);
       context.onProfileUpdate(updates);
+      const understood = NUMERIC_PROFILE_FIELDS.filter((f) => typeof updates[f] === 'number').map((f) =>
+        describeValue(f, updates[f] as number)
+      );
       const res = {
-        success: notSaved.length === 0,
+        success: notSaved.length === 0 && needsConfirmation.length === 0,
         updated: updates,
+        // The bot confirms this briefly so the employee can correct it
+        ...(understood.length > 0 && { understood_he: `הבנתי: ${understood.join(', ')}` }),
         ...(notSaved.length > 0 && {
           notSaved,
           message: `לא נשמר: ${notSaved.map((n) => n.field).join(', ')}. העובד לא כתב את הערכים האלה. אל תניח ערכים: שאל את העובד ישירות ובקש מספר מדויק.`,
+        }),
+        ...(needsConfirmation.length > 0 && {
+          needsConfirmation,
+          askAgain_he: needsConfirmation.map((n) => n.question_he).join(' '),
         }),
       };
       return { result: res, outputTextForGuardrail: JSON.stringify(updates) };
@@ -455,7 +468,7 @@ export async function executeTool(
         familyGapShare: Math.round(comparison.altState.familyGapShare),
         steps: comparison.steps.map((s) => ({
           label: s.label_he,
-          deltaNet: Math.round(s.deltaNet),
+          deltaNet: s.deltaNetRounded ?? Math.round(s.deltaNet),
           explanation: s.explanation_he,
         })),
         summary: comparison.summary_he,
@@ -473,7 +486,7 @@ export async function executeTool(
         res.altNIHealth,
         res.evGrossUp,
         res.familyGapShare,
-        ...comparison.steps.map((s) => Math.round(Math.abs(s.deltaNet))),
+        ...comparison.steps.map((s) => Math.abs(s.deltaNetRounded ?? Math.round(s.deltaNet))),
       ].join(' ');
 
       return { result: res, outputTextForGuardrail: numbersGathered };
