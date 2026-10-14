@@ -35,13 +35,14 @@ export function calculateBracketTax(taxableBase: number): number {
 
 /**
  * Computes the employee pension tax credit (זיכוי מס בגין הפקדה לפנסיה - סעיף 45א).
- * Rate: 35% on employee pension deposit up to 7% of income ceiling (9,500 ₪) -> max 232.75 ₪.
+ * rate (35%) on the employee pension deposit, up to maxContributionRate (7%) of incomeCeiling (9,500 ₪)
+ * -> max 232.75 ₪. All three values come from rules.netMethod.pensionCredit.
  */
 export function calculatePensionCredit(pensionDeposit: number): number {
   if (pensionDeposit <= 0) return 0;
   const rules = getRules();
   const cfg = rules.netMethod.pensionCredit;
-  const maxDeposit = 0.07 * cfg.incomeCeiling;
+  const maxDeposit = cfg.maxContributionRate * cfg.incomeCeiling;
   const eligibleDeposit = Math.min(pensionDeposit, maxDeposit);
   return cfg.rate * eligibleDeposit;
 }

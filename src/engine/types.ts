@@ -12,18 +12,22 @@ export interface TaxBracket {
 
 export interface Rules {
   version: string;
+  note?: string;
   budgets: Record<string, number>;
   groupOrder: string[];
   chooseFrom: string;
   electric: {
     netBonus: number;
     method: 'gross_up' | 'gross_250';
+    note?: string;
   };
   familyTrack: {
     minChildren: number;
     childMaxAge: number;
-    carPrice: number;
+    cars: string[]; // catalog ids selectable in the family track; the first is the default
+    priceSource: 'catalogue'; // car cost = catalog companyCost
     gapSplitEmployee: number;
+    note?: string;
   };
   waiver: {
     allowedBy: string;
@@ -50,8 +54,23 @@ export interface Rules {
     };
     pensionCredit: {
       rate: number;
+      maxContributionRate: number;
       incomeCeiling: number;
+      note?: string;
     };
+    contributionsBase: 'gross'; // pension and study fund on base + commissions + bonus
+    contributionsNote?: string;
+    participation: {
+      treatment: 'net_deduction';
+      reducesValueOfUse: boolean;
+      note?: string;
+    };
+    rounding: {
+      during: 'none' | 'shekel'; // 'none': no rounding inside the calculation (incl. EV gross-up)
+      display: 'shekel';
+      note?: string;
+    };
+    note?: string;
   };
   valueOfUse: {
     source: string;

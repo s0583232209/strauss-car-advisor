@@ -126,13 +126,22 @@ export function buildScenario(
     altState.evGrossUp = 0;
   } else if (request.type === 'family_track') {
     // Family track (ברוכת ילדים)
-    const targetCarId = request.targetCarId || 'CAR-19'; // Default Carnival
-    targetCar = carsCatalog.find((c) => c.id === targetCarId) || carsCatalog.find((c) => c.id === 'CAR-19')!;
+    // Cars come from rules.familyTrack.cars (first = default); cost from the catalog (priceSource: catalogue)
+    const familyCarIds = rules.familyTrack.cars;
+    const targetCarId = request.targetCarId || familyCarIds[0];
+    const inTrack = familyCarIds.includes(targetCarId);
+    targetCar =
+      (inTrack ? carsCatalog.find((c) => c.id === targetCarId) : undefined) ||
+      carsCatalog.find((c) => c.id === familyCarIds[0])!;
     altCarLabel = `${targetCar.model} (${targetCar.fuel}) - מסלול ברוכת ילדים`;
     companyCost = targetCar.companyCost;
 
     const minKids = rules.familyTrack.minChildren;
-    if (profile.childrenUpTo23 < minKids) {
+    if (!inTrack) {
+      const names = familyCarIds.map((id) => carsCatalog.find((c) => c.id === id)?.model ?? id).join(', ');
+      eligible = false;
+      eligibilityReason_he = `הרכב המבוקש אינו חלק ממסלול ברוכת ילדים. רכבי המסלול: ${names}.`;
+    } else if (profile.childrenUpTo23 < minKids) {
       eligible = false;
       eligibilityReason_he = `מסלול ברוכת ילדים דורש לפחות ${minKids} ילדים עד גיל ${rules.familyTrack.childMaxAge} (הוזנו ${profile.childrenUpTo23} ילדים).`;
     } else {

@@ -55,8 +55,10 @@ export function calculateNetBreakdown(state: TaxCalculationInputs): NetBreakdown
 
 /**
  * Calculates EV refund gross-up amount to achieve target net (default +250 ₪ net).
- * Uses bisection on evGrossUp to find the exact gross amount.
- * Rounded to whole shekels: Noa 440, Yossi 440, Rachel 473, Eli 473.
+ * Uses bisection on evGrossUp to find the exact gross amount (|Δnet − target| < 0.005).
+ * rules.netMethod.rounding.during = 'none': returned unrounded, so the net bonus is exactly 250
+ * (Noa 439.91, Yossi 439.91, Rachel 473.22, Eli 473.22; displayed 440 / 473).
+ * 'shekel': rounded to whole shekels when that stays within 1 ₪ of the target.
  */
 export function calculateEVGrossUp(
   stateWithoutEV: TaxCalculationInputs,
@@ -90,6 +92,10 @@ export function calculateEVGrossUp(
       high = mid;
     }
     bestGross = mid;
+  }
+
+  if (rules.netMethod.rounding.during === 'none') {
+    return bestGross;
   }
 
   // Round to nearest integer for realistic Israeli payslip gross-up

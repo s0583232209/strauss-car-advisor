@@ -45,7 +45,7 @@ Tax-authority CSV specifics (verified on the real file, 77,988 rows, 19 columns)
 
 ## 3. Calculation engine (pure TS), exact specification
 
-Monthly (not cumulative), 2025 tables, all numbers read from `rules.netMethod` (section 4.1). Use decimals/agorot internally; display whole shekels. **Displayed difference = round(net_alt) − round(net_today)** (this yields −1,938 and +721 as in the reference).
+Monthly (not cumulative), 2025 tables, all numbers read from `rules.netMethod` (section 4.1). Use decimals/agorot internally with no rounding anywhere in the calculation, including the EV gross-up (`netMethod.rounding.during: "none"`); round to whole shekels only for display (`rounding.display: "shekel"`). **Displayed difference = round(net_alt) − round(net_today)** (this yields −1,938 and +721 as in the reference).
 
 ### 3.1 Formulas
 
@@ -58,18 +58,18 @@ studyFund     = studyFundPct * pensionable     // net deduction, no tax effect
 cash          = base + commissions + bonus + maintenance + evGrossUp
 taxableBase   = cash + benefitValue            // benefit enters tax AND NI/health base, is not paid in cash
 bracketTax    = progressive tax on taxableBase using rules.netMethod.brackets (last bracket has null ceiling)
-pensionCredit = pensionCredit.rate(0.35) * min(pension, 0.07 * pensionCredit.incomeCeiling(9500))   // = max 232.75 ₪
+pensionCredit = pensionCredit.rate(0.35) * min(pension, pensionCredit.maxContributionRate(0.07) * pensionCredit.incomeCeiling(9500))   // = max 232.75 ₪
 tax           = max(0, bracketTax - creditPoints*creditPointValue(242) - pensionCredit)
 niHealth      = (NI.lowRate+health.lowRate)*min(taxableBase, threshold 7522)
               + (NI.highRate+health.highRate)*max(0, min(taxableBase, ceiling 50695) - 7522)
 net           = cash - tax - niHealth - pension - studyFund - participation - familyGapShare
 ```
 
-Maintenance (אחזקה) is taxable and NOT pensionable. Unused car budget is never paid as cash (`unusedBudget: not_paid`); when a car costs less than the budget, say so in the explanation.
+Pension and study fund are computed on the full gross: base + commissions + bonus (`netMethod.contributionsBase: "gross"`, a simplification). Participation is a net deduction only and does not reduce the taxable benefit (`netMethod.participation`: `net_deduction`, `reducesValueOfUse: false`). Maintenance (אחזקה) is taxable and NOT pensionable. Unused car budget is never paid as cash (`unusedBudget: not_paid`); when a car costs less than the budget, say so in the explanation.
 
 ### 3.2 EV refund (grossed up to exactly +250 ₪ net)
 
-Only drive code 3 (electric) qualifies; hybrid/plug-in do not. `grossUpForNet(state, 250)`: bisection on `evGrossUp` (tolerance 0.005) such that `net(state with g) − net(state without) = 250` (same state otherwise, including the new car's benefit and participation). Flag `electric.method`: `gross_up` (default) | `gross_250` (simply add 250 gross). Expected gross-up amounts: Noa 440, Yossi 440, Rachel 473, Eli 473.
+Only drive code 3 (electric) qualifies; hybrid/plug-in do not. `grossUpForNet(state, 250)`: bisection on `evGrossUp` (tolerance 0.005) such that `net(state with g) − net(state without) = 250` (same state otherwise, including the new car's benefit and participation). Flag `electric.method`: `gross_up` (default) | `gross_250` (simply add 250 gross). The gross-up is not rounded (`netMethod.rounding.during: "none"`), so the employee gets exactly +250 ₪ net. Expected gross-up amounts (displayed, rounded): Noa 440, Yossi 440, Rachel 473, Eli 473 (unrounded about 439.91 and 473.22).
 
 ### 3.3 Scenario builder and explanation
 
@@ -83,15 +83,35 @@ The total difference is the exact sum of sequential steps, each measured as the 
 ```json
 {
   "version": "mock-2026-10-12",
-  "budgets": { "א": 3500, "ב": 3700, "ג": 4500, "ד": 5200 },
-  "groupOrder": ["א", "ב", "ג", "ד"],
+  "note": "נתוני דמה של האתגר (קוד פתוח). בפיילוט מחליפים את הקובץ בנתונים האמיתיים - לא את הקוד.",
+  "budgets": {
+    "א": 3500,
+    "ב": 3700,
+    "ג": 4500,
+    "ד": 5200
+  },
+  "groupOrder": [
+    "א",
+    "ב",
+    "ג",
+    "ד"
+  ],
   "chooseFrom": "own_group_or_lower",
-  "electric": { "netBonus": 250, "method": "gross_up" },
+  "electric": {
+    "netBonus": 250,
+    "method": "gross_up",
+    "note": "העובד רואה +250 ₪ נטו בדיוק; המעסיק מגלם את המס"
+  },
   "familyTrack": {
     "minChildren": 4,
     "childMaxAge": 23,
-    "carPrice": 6000,
-    "gapSplitEmployee": 0.5
+    "cars": [
+      "CAR-19",
+      "CAR-20"
+    ],
+    "priceSource": "catalogue",
+    "gapSplitEmployee": 0.5,
+    "note": "זכאים לרכב מקבוצת ׳משפחתי׳ בקטלוג (קרניבל 6,000 ₪, סנטה פה 5,600 ₪ - העלות לפי הקטלוג, לא מספר אחד); על הפער מעל תקציב הקבוצה - העובד 50% (ניכוי נטו), המעסיק 50%"
   },
   "waiver": {
     "allowedBy": "occupation",
@@ -104,13 +124,34 @@ The total difference is the exact sum of sequential steps, each measured as the 
     "taxYear": 2025,
     "creditPointValue": 242,
     "brackets": [
-      [7010, 0.1],
-      [10060, 0.14],
-      [16150, 0.2],
-      [22440, 0.31],
-      [46690, 0.35],
-      [60130, 0.47],
-      [null, 0.5]
+      [
+        7010,
+        0.1
+      ],
+      [
+        10060,
+        0.14
+      ],
+      [
+        16150,
+        0.2
+      ],
+      [
+        22440,
+        0.31
+      ],
+      [
+        46690,
+        0.35
+      ],
+      [
+        60130,
+        0.47
+      ],
+      [
+        null,
+        0.5
+      ]
     ],
     "nationalInsurance": {
       "threshold": 7522,
@@ -124,11 +165,35 @@ The total difference is the exact sum of sequential steps, each measured as the 
       "lowRate": 0.0323,
       "highRate": 0.0517
     },
-    "pensionCredit": { "rate": 0.35, "incomeCeiling": 9500 }
+    "pensionCredit": {
+      "rate": 0.35,
+      "maxContributionRate": 0.07,
+      "incomeCeiling": 9500,
+      "note": "זיכוי 35% על הפרשת העובד לפנסיה, עד 7% מהכנסה מזכה של 9,500 ₪ (= עד 232.75 ₪ בחודש) - לכן בכל הדוגמאות הזיכוי זהה גם כשהעובד מפריש 6%"
+    },
+    "contributionsBase": "gross",
+    "contributionsNote": "פנסיה וקרן השתלמות של העובד מחושבות על כל הברוטו: בסיס + עמלות + בונוס (פישוט; בפועל לעיתים על הבסיס בלבד)",
+    "participation": {
+      "treatment": "net_deduction",
+      "reducesValueOfUse": false,
+      "note": "השתתפות העובד ברכב יורדת מהנטו בלבד ואינה מקטינה את שווי השימוש החייב (פישוט)"
+    },
+    "rounding": {
+      "during": "none",
+      "display": "shekel",
+      "note": "החישוב כולו ללא עיגול (כולל גילום החזר החשמל); עיגול לשקל שלם רק בתצוגה - לכן העובד מקבל 250 ₪ נטו בדיוק"
+    },
+    "note": "לוחות 2025 להמחשה; קרן השתלמות עובד - ניכוי נטו; שווי שימוש מתווסף לבסיס המס ולביטוח לאומי"
   },
   "valueOfUse": {
     "source": "רשות המסים - הקובץ המורחב 2026",
-    "key": ["שנת מס", "שנת רישום", "קוד סוג רכב", "קוד תוצר", "קוד דגם"],
+    "key": [
+      "שנת מס",
+      "שנת רישום",
+      "קוד סוג רכב",
+      "קוד תוצר",
+      "קוד דגם"
+    ],
     "driveField": {
       "0": "בנזין",
       "1": "היברידי",
@@ -139,7 +204,7 @@ The total difference is the exact sum of sequential steps, each measured as the 
 }
 ```
 
-Family-track car prices (company cost): CARNIVAL 6,000, SANTA FE 5,600 (from the catalog `companyCost`; `carPrice` 6,000 is the Carnival default). Gap = carCompanyCost − budget(employee group); employee pays `gapSplitEmployee` (50%) of the gap, deducted from net; employer pays the rest. Verified example from the brief: budget 3,500, cost 6,000, gap 2,500 → employer 1,250, employee 1,250. David: group ב (3,700) + Carnival → gap 2,300 → employee 1,150.
+Family-track cars are listed in `familyTrack.cars` (CAR-19 CARNIVAL, CAR-20 SANTA FE; the first is the default). Their price is the catalog `companyCost` (`priceSource: "catalogue"`): CARNIVAL 6,000, SANTA FE 5,600. There is no single `carPrice`. A car outside the list is not eligible for the family track. Gap = carCompanyCost − budget(employee group); employee pays `gapSplitEmployee` (50%) of the gap, deducted from net; employer pays the rest. Verified example from the brief: budget 3,500, cost 6,000, gap 2,500 → employer 1,250, employee 1,250. David: group ב (3,700) + Carnival → gap 2,300 → employee 1,150.
 
 ### 4.2 Catalog (20 rows; CSV columns: id, group, make, model, productCode, modelCode, description, year, fuel, listPrice, benefit, companyCost, participation)
 
@@ -242,7 +307,7 @@ These values come from the official workbook sheet "חישובים" and were rep
 
 ### 8.2 Rule assertions
 
-Delta steps sum exactly to the total; EV gross-up returns exactly +250 net; hybrid and plug-in get no refund; mandatory-car occupation cannot waive; family track needs ≥4 children up to 23 (David 5 ✓, Noa 2 ✗); a car above the employee's group is rejected; family cars are not selectable outside the family track; the family-gap example (budget 3,500, cost 6,000 → 1,250/1,250); CSV lookup with the vehicle-type code returns 3,130 for ATTO 3 and never 6,950; all 20 catalog benefit values equal the CSV values (when loaded).
+Delta steps sum exactly to the total; EV gross-up returns exactly +250 net (unrounded gross-up, ±0.005); hybrid and plug-in get no refund; mandatory-car occupation cannot waive; family track needs ≥4 children up to 23 (David 5 ✓, Noa 2 ✗); a car above the employee's group is rejected; family cars are not selectable outside the family track; the family-gap example (budget 3,500, cost 6,000 → 1,250/1,250); CSV lookup with the vehicle-type code returns 3,130 for ATTO 3 and never 6,950; all 20 catalog benefit values equal the CSV values (when loaded).
 
 ### 8.3 Generic Group-B waiver (required by the brief: it must work for more than the script example)
 
