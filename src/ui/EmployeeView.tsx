@@ -21,8 +21,8 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { runAgentTurn } from '../agent/loop.ts';
+import { buildOpeningMessage } from '../agent/profileStatus.ts';
 import { getMissingFields } from '../agent/tools.ts';
-import { OPENING_MESSAGE } from '../agent/prompt.ts';
 import employeesData from '../data/employees.json';
 import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
 import { ComparisonResult, EligibilityGroup, EmployeeProfile } from '../engine/types.ts';
@@ -119,7 +119,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         const greeting: ChatMessage = {
           id: 'msg-0',
           role: 'assistant',
-          content: OPENING_MESSAGE,
+          content: buildOpeningMessage(emptyProfile()),
           timestamp: Date.now(),
         };
         setMessages([greeting]);
@@ -326,7 +326,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
     const greeting: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'assistant',
-      content: OPENING_MESSAGE,
+      content: buildOpeningMessage(emptyProfile()),
       timestamp: Date.now(),
     };
     const cleared = emptyProfile();

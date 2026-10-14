@@ -8,7 +8,7 @@ import occupationsData from '../data/occupations.json';
 import { canSelectCarGroup } from '../engine/rules.ts';
 import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
 import { Car, ComparisonResult, EmployeeProfile, Occupation, ScenarioType } from '../engine/types.ts';
-import { describeValue, extractNumbers, normalizeField, NumericField } from './normalize.ts';
+import { getProfileFieldStatus } from './profileStatus.ts';
 import { AgentContext, MissingFieldInfo, ToolDefinition } from './types.ts';
 
 const carsCatalog = catalogData as Car[];
@@ -104,7 +104,7 @@ export function getMissingFields(
 export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'update_profile',
-    description: 'Save ONLY values the employee stated explicitly in this conversation. Never assume, estimate or fill in typical values; if a value was not stated, ask the employee instead. Numbers that do not appear in the employee messages are rejected.',
+    description: 'Update employee salary, role, car, or deduction fields. Only call with values the employee just stated that differ from the card; do not re-send fields already on the card. Save ONLY values the employee stated explicitly in this conversation. Never assume, estimate or fill in typical values; if a value was not stated, ask the employee instead. Numbers that do not appear in the employee messages are rejected.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -127,7 +127,7 @@ export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'get_missing_fields',
-    description: 'Returns the required fields still missing from the profile, in the order to ask them. Call it before every run_comparison and ask the employee about the first missing field.',
+    description: 'Checks which required fields are still missing for a given scenario, and lists fields already on the employee card (alreadyInCard). Never ask the employee for a field in alreadyInCard.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -287,25 +287,29 @@ export async function executeTool(
         }
       }
 
-      // Mutate the turn's profile in place so later tools in the same turn see the new values
-      Object.assign(context.profile, updates);
-      context.onProfileUpdate(updates);
-      const understood = NUMERIC_PROFILE_FIELDS.filter((f) => typeof updates[f] === 'number').map((f) =>
-        describeValue(f, updates[f] as number)
-      );
+      // Values identical to the card are not updates: report them as already known
+      const alreadyInCard: string[] = [];
+      for (const key of Object.keys(updates) as Array<keyof EmployeeProfile>) {
+        if (updates[key] === context.profile[key]) {
+          alreadyInCard.push(key);
+          delete updates[key];
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        context.onProfileUpdate(updates);
+        // Keep this turn's view of the card current (React state updates are async)
+        context.profile = { ...context.profile, ...updates };
+      }
       const res = {
         success: notSaved.length === 0 && needsConfirmation.length === 0,
         updated: updates,
-        // The bot confirms this briefly so the employee can correct it
-        ...(understood.length > 0 && { understood_he: `הבנתי: ${understood.join(', ')}` }),
+        alreadyInCard,
         ...(notSaved.length > 0 && {
           notSaved,
           message: `לא נשמר: ${notSaved.map((n) => n.field).join(', ')}. העובד לא כתב את הערכים האלה. אל תניח ערכים: שאל את העובד ישירות ובקש מספר מדויק.`,
         }),
-        ...(needsConfirmation.length > 0 && {
-          needsConfirmation,
-          askAgain_he: needsConfirmation.map((n) => n.question_he).join(' '),
-        }),
+        ...(alreadyInCard.length > 0 ? { note: 'שדות alreadyInCard כבר קיימים בכרטיס עם אותו ערך: אין לשאול או לעדכן אותם שוב.' } : {}),
       };
       return { result: res, outputTextForGuardrail: JSON.stringify(updates) };
     }
@@ -313,10 +317,17 @@ export async function executeTool(
     case 'get_missing_fields': {
       const scType = (args.scenarioType || 'general') as ScenarioType;
       const missing = getMissingFields(context.profile, scType);
+
+      // Fields already on the card: the model must not ask for these
+      const alreadyInCard = getProfileFieldStatus(context.profile)
+        .filter((f) => f.known)
+        .map((f) => ({ field: f.field, label_he: f.label_he, value: f.value }));
+
       const res = {
         scenarioType: scType,
         missing,
         isComplete: missing.length === 0,
+        alreadyInCard,
         ...(missing.length > 0 && {
           next: missing[0],
           instruction: `שאל את העובד על: ${missing[0].label_he}. אל תניח ערך ואל תחשב לפני שכל השדות מולאו.`,
