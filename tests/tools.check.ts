@@ -121,8 +121,9 @@ async function main() {
   {
     const s = makeContext({});
     const { result } = await executeTool('get_missing_fields', { scenarioType: 'general' }, s.ctx);
-    // Order: group, base, car today, children (always asked, decision 2026-10-13), then the rest
-    const expected = ['group', 'base', 'hasCar', 'childrenUpTo23', 'occupation', 'commissions', 'bonus', 'pensionPct', 'studyFundPct', 'creditPoints'];
+    // Order: group, base, car today, children (always asked, decision 2026-10-13), then the rest.
+    // No occupation: it is asked only for waive_car (SPEC 7, changed 2026-10-14)
+    const expected = ['group', 'base', 'hasCar', 'childrenUpTo23', 'commissions', 'bonus', 'pensionPct', 'studyFundPct', 'creditPoints'];
     const got = fieldsOf(result);
     check(
       'get_missing_fields: empty profile lists all fields in asking order',
@@ -136,6 +137,25 @@ async function main() {
     const s = makeContext(noKids);
     const { result } = await executeTool('get_missing_fields', { scenarioType: 'go_electric' }, s.ctx);
     check('get_missing_fields: children asked outside family track too', fieldsOf(result).join(',') === 'childrenUpTo23');
+  }
+  {
+    // Occupation is required only for a waiver (SPEC 7)
+    const { occupation, ...noOcc } = noa;
+    const electric = await executeTool('get_missing_fields', { scenarioType: 'go_electric' }, makeContext(noOcc).ctx);
+    check('get_missing_fields: go_electric does not ask occupation', !fieldsOf(electric.result).includes('occupation'), fieldsOf(electric.result).join(','));
+    const change = await executeTool('get_missing_fields', { scenarioType: 'change_car' }, makeContext(noOcc).ctx);
+    check('get_missing_fields: change_car does not ask occupation', !fieldsOf(change.result).includes('occupation'), fieldsOf(change.result).join(','));
+    const waive = await executeTool('get_missing_fields', { scenarioType: 'waive_car' }, makeContext(noOcc).ctx);
+    check('get_missing_fields: waive_car asks occupation', fieldsOf(waive.result).includes('occupation'), fieldsOf(waive.result).join(','));
+    const s = makeContext(noOcc);
+    await executeTool('run_comparison', { scenarioType: 'go_electric', targetCarId: 'CAR-10' }, s.ctx);
+    check('run_comparison: go_electric works without occupation', s.comparisons.length === 1);
+  }
+  {
+    // Group is asked directly, never derived from occupation
+    const s = makeContext({});
+    await executeTool('update_profile', { occupation: 'מנהל/ת מוצר' }, s.ctx);
+    check('update_profile: occupation does not set group', s.ctx.profile.group === undefined);
   }
   {
     const s = makeContext({ ...noa, childrenUpTo23: 0 });
