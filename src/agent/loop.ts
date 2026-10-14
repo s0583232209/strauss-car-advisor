@@ -44,10 +44,9 @@ export async function runAgentTurn(
   // Model that answered the previous call in this turn (thought signatures are model-specific)
   let turnModel: string | undefined;
 
-  const allowedSourcesForGuardrail: string[] = [
-    userMessage,
-    ...history.map((h) => h.content),
-  ];
+  // Guardrail sources: this turn's tool outputs, and what people (not the bot) wrote
+  const toolOutputsThisTurn: string[] = [];
+  const peopleTexts = [...history.filter((h) => h.role !== 'assistant').map((h) => h.content), userMessage];
 
   // Profile values may only come from what the employee wrote (not the bot, not tool outputs)
   context.userTexts = [...history.filter((h) => h.role === 'user').map((h) => h.content), userMessage];
@@ -84,7 +83,7 @@ export async function runAgentTurn(
         );
 
         if (outputTextForGuardrail) {
-          allowedSourcesForGuardrail.push(outputTextForGuardrail);
+          toolOutputsThisTurn.push(outputTextForGuardrail);
         }
 
         // functionResponse.response must be a JSON object
@@ -118,7 +117,11 @@ export async function runAgentTurn(
     }
 
     // Run guardrail verification on numbers
-    const guardrail = verifyNumbersInResponse(candidateText, allowedSourcesForGuardrail);
+    const guardrail = verifyNumbersInResponse(candidateText, {
+      toolOutputs: toolOutputsThisTurn,
+      userTexts: peopleTexts,
+      profile: context.profile,
+    });
 
     if (guardrail.passed) {
       return { text: candidateText };
