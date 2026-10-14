@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { agentLog } from './debugLog.ts';
 import { verifyNumbersInResponse } from './guard.ts';
 import { callLlm, LlmMessage } from './llm.ts';
 import { describeProfileCard } from './profileStatus.ts';
@@ -58,14 +59,21 @@ export async function runAgentTurn(
   // Tool calls already executed in this turn (name + args), to block repeat loops
   const executedCalls = new Set<string>();
 
+  agentLog.turnStart(userMessage, context.profile, context.repParticipationMode);
+  const finish = (reason: string, result: TurnResult): TurnResult => {
+    agentLog.turnEnd(reason, result.text);
+    return result;
+  };
+
   while (loopCount < MAX_TOOL_CALLS) {
     if (Date.now() - startTime > timeoutMs) {
-      return {
+      return finish('timeout after 30s', {
         text: 'הבקשה ארכה מעל לזמן המותר (30 שניות). מוצגים נתוני ההשוואה העדכניים שנשמרו עד כה.',
-      };
+      });
     }
 
     loopCount++;
+    agentLog.round(loopCount, MAX_TOOL_CALLS, Date.now() - startTime);
 
     // Fresh card snapshot every call, so the model sees what is already known
     const card = describeProfileCard(context.profile);
@@ -79,6 +87,7 @@ export async function runAgentTurn(
       onThrottled,
     });
     if (response.model) turnModel = response.model;
+    agentLog.modelReply(response.model, response.functionCalls, response.text || '');
 
     // Handle function calls: send them back as real functionCall / functionResponse turns
     if (response.functionCalls && response.functionCalls.length > 0) {
@@ -87,6 +96,7 @@ export async function runAgentTurn(
         const callKey = `${call.name}:${JSON.stringify(call.args ?? {})}`;
         const isRepeat = executedCalls.has(callKey);
         executedCalls.add(callKey);
+        if (isRepeat) agentLog.repeatSkipped(call.name);
 
         const { result, outputTextForGuardrail } = isRepeat
           ? {
@@ -97,6 +107,7 @@ export async function runAgentTurn(
               outputTextForGuardrail: '',
             }
           : await executeTool(call.name, call.args, context);
+        if (!isRepeat) agentLog.toolResult(call.name, call.args, result, context.profile);
 
         if (outputTextForGuardrail) {
           allowedSourcesForGuardrail.push(outputTextForGuardrail);
@@ -124,6 +135,7 @@ export async function runAgentTurn(
 
     // The model wrote a tool call as text instead of calling the tool: ask again
     if (PSEUDO_TOOL_TEXT.test(candidateText) && loopCount < MAX_TOOL_CALLS) {
+      agentLog.pseudoToolText();
       conversation.push({ role: 'assistant', content: candidateText });
       conversation.push({
         role: 'user',
@@ -136,8 +148,9 @@ export async function runAgentTurn(
     const guardrail = verifyNumbersInResponse(candidateText, allowedSourcesForGuardrail);
 
     if (guardrail.passed) {
-      return { text: candidateText };
+      return finish('answered', { text: candidateText });
     }
+    agentLog.guardrailFailed(guardrail.inventedNumbers);
 
     // Guardrail triggered: attempt 1 regeneration with correction
     if (loopCount < MAX_TOOL_CALLS) {
@@ -149,12 +162,12 @@ export async function runAgentTurn(
     }
 
     // If still failing after regeneration attempts, provide safe fallback
-    return {
+    return finish('number guard failed on last round', {
       text: 'מצורף למטה כרטיס השוואת השכר המפורט ומדויק על פי נתוני המחשבון:',
-    };
+    });
   }
 
-  return {
+  return finish(`hit the ${MAX_TOOL_CALLS}-round limit (loop)`, {
     text: 'סיימתי את חישוב הנתונים. כרטיס ההשוואה המלא מופיע למטה.',
-  };
+  });
 }

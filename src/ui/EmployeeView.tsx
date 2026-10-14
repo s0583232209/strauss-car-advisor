@@ -119,7 +119,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         const greeting: ChatMessage = {
           id: 'msg-0',
           role: 'assistant',
-          content: buildOpeningMessage(profile),
+          content: buildOpeningMessage(emptyProfile()),
           timestamp: Date.now(),
         };
         setMessages([greeting]);
@@ -326,7 +326,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
     const greeting: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'assistant',
-      content: buildOpeningMessage(profile),
+      content: buildOpeningMessage(emptyProfile()),
       timestamp: Date.now(),
     };
     const cleared = emptyProfile();

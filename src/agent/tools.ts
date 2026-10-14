@@ -299,9 +299,13 @@ export async function executeTool(
         context.profile = { ...context.profile, ...updates };
       }
       const res = {
-        success: true,
+        success: notSaved.length === 0,
         updated: updates,
         alreadyInCard,
+        ...(notSaved.length > 0 && {
+          notSaved,
+          message: `לא נשמר: ${notSaved.map((n) => n.field).join(', ')}. העובד לא כתב את הערכים האלה. אל תניח ערכים: שאל את העובד ישירות ובקש מספר מדויק.`,
+        }),
         ...(alreadyInCard.length > 0 ? { note: 'שדות alreadyInCard כבר קיימים בכרטיס עם אותו ערך: אין לשאול או לעדכן אותם שוב.' } : {}),
       };
       return { result: res, outputTextForGuardrail: JSON.stringify(updates) };
