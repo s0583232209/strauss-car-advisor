@@ -626,10 +626,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         </div>
 
         {/* Right Column: Collected Profile Panel (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs p-5 sticky top-24">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-line border-t-[3px] border-t-green shadow-xs p-5 sticky top-24">
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-brand/10 text-brand-dark flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-lime-light text-success flex items-center justify-center">
                 <User className="w-4 h-4" />
               </div>
               <div>
@@ -675,7 +675,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                   </span>
                 )}
               </div>
-              <span className="text-xs px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
+              <span className="text-xs px-2 py-0.5 rounded bg-lime-light text-success border border-green/25 font-semibold">
                 קבוצה {profile.group ?? 'חסר'}
               </span>
             </div>
