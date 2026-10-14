@@ -309,28 +309,23 @@ export async function executeTool(
 
     case 'get_missing_fields': {
       const scType = (args.scenarioType || 'general') as ScenarioType;
-      const prof = context.profile;
-      const missing: MissingFieldInfo[] = [];
-
-      if (!prof.base || prof.base <= 0) {
-        missing.push({ field: 'base', label_he: 'שכר בסיס חודשי', whyNeeded_he: 'לקביעת מדרגות המס וחישוב שכר הנטו' });
-      }
-      if (!prof.group) {
-        missing.push({ field: 'group', label_he: 'קבוצת זכאות (א–ד)', whyNeeded_he: 'לקביעת תקציב הרכב והרכבים המותרים' });
-      }
-      if (prof.hasCar && (!prof.currentCarName || prof.currentCarName === 'רכב חברה נוכחי')) {
-        missing.push({ field: 'currentCarName', label_he: 'דגם רכב נוכחי', whyNeeded_he: 'לשליפת שווי השימוש הנוכחי לצורך השוואה מדויקת' });
-      }
-      if (scType === 'family_track' && prof.childrenUpTo23 === undefined) {
-        missing.push({ field: 'childrenUpTo23', label_he: 'מספר ילדים עד גיל 23', whyNeeded_he: 'לבדיקת זכאות למסלול ברוכת ילדים (סף מינימלי: 4 ילדים)' });
-      }
+      const missing = getMissingFields(context.profile, scType);
 
       // Fields already on the card: the model must not ask for these
-      const alreadyInCard = getProfileFieldStatus(prof)
+      const alreadyInCard = getProfileFieldStatus(context.profile)
         .filter((f) => f.known)
         .map((f) => ({ field: f.field, label_he: f.label_he, value: f.value }));
 
-      const res = { scenarioType: scType, missing, isComplete: missing.length === 0, alreadyInCard };
+      const res = {
+        scenarioType: scType,
+        missing,
+        isComplete: missing.length === 0,
+        alreadyInCard,
+        ...(missing.length > 0 && {
+          next: missing[0],
+          instruction: `שאל את העובד על: ${missing[0].label_he}. אל תניח ערך ואל תחשב לפני שכל השדות מולאו.`,
+        }),
+      };
       return { result: res, outputTextForGuardrail: JSON.stringify(res) };
     }
 
