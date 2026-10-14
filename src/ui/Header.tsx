@@ -89,13 +89,14 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* Layered waves in the pinwheel colors: a red line right under the blue, orange below it */}
+      {/* Layered waves in the pinwheel colors: red, orange and green lines under the blue */}
       <svg
-        className="block w-full h-4 sm:h-5 -mt-px pointer-events-none"
-        viewBox="0 0 1440 40"
+        className="block w-full h-5 sm:h-6 -mt-px pointer-events-none"
+        viewBox="0 0 1440 46"
         preserveAspectRatio="none"
         aria-hidden="true"
       >
+        <path fill="#78A12F" d="M0,0 H1440 V26 C1180,52 900,50 720,35 C540,20 260,16 0,43 Z" />
         <path fill="#F48326" d="M0,0 H1440 V22 C1180,46 900,44 720,30 C540,16 260,12 0,38 Z" />
         <path fill="#ED3024" d="M0,0 H1440 V18 C1180,40 900,38 720,25 C540,12 260,8 0,33 Z" />
         <path fill="#0A6EA8" d="M0,0 H1440 V13 C1180,34 900,32 720,20 C540,8 260,4 0,27 Z" />
