@@ -468,7 +468,7 @@ export async function executeTool(
         familyGapShare: Math.round(comparison.altState.familyGapShare),
         steps: comparison.steps.map((s) => ({
           label: s.label_he,
-          deltaNet: Math.round(s.deltaNet),
+          deltaNet: s.deltaNetRounded ?? Math.round(s.deltaNet),
           explanation: s.explanation_he,
         })),
         summary: comparison.summary_he,
@@ -486,7 +486,7 @@ export async function executeTool(
         res.altNIHealth,
         res.evGrossUp,
         res.familyGapShare,
-        ...comparison.steps.map((s) => Math.round(Math.abs(s.deltaNet))),
+        ...comparison.steps.map((s) => Math.abs(s.deltaNetRounded ?? Math.round(s.deltaNet))),
       ].join(' ');
 
       return { result: res, outputTextForGuardrail: numbersGathered };

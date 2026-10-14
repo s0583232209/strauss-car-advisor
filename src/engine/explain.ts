@@ -96,6 +96,32 @@ export function buildDeltaSteps(
   return { steps, sumSteps, exactDiff };
 }
 
+/**
+ * Rounds every step to whole shekels so the displayed steps add up exactly to the displayed
+ * difference (diffNet = round(alt) - round(today)). The leftover from rounding goes to the step
+ * with the largest absolute value (the first one on a tie). Returns new steps; deltaNet stays exact.
+ */
+export function roundStepsToTotal(steps: DeltaStep[], totalRounded: number): DeltaStep[] {
+  if (steps.length === 0) {
+    if (totalRounded !== 0) {
+      throw new Error(`roundStepsToTotal: no steps but the displayed difference is ${totalRounded}`);
+    }
+    return [];
+  }
+  const rounded = steps.map((s) => ({ ...s, deltaNetRounded: Math.round(s.deltaNet) }));
+  const leftover = totalRounded - rounded.reduce((acc, s) => acc + s.deltaNetRounded, 0);
+  if (leftover !== 0) {
+    let largest = 0;
+    for (let i = 1; i < steps.length; i++) {
+      if (Math.abs(steps[i].deltaNet) > Math.abs(steps[largest].deltaNet)) largest = i;
+    }
+    rounded[largest].deltaNetRounded += leftover;
+  }
+  // Math.round(-0.4) is -0: show it as 0
+  for (const s of rounded) s.deltaNetRounded = s.deltaNetRounded + 0;
+  return rounded;
+}
+
 /** Formats a two-line plain-Hebrew summary of the comparison */
 export function buildPlainHebrewSummary(
   todayState: TaxCalculationInputs,

@@ -44,12 +44,14 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
 
   let runningTotal = todayNet;
   for (const step of steps) {
+    // Rounded steps, so the bars end exactly at the alternative's net
+    const delta = step.deltaNetRounded ?? Math.round(step.deltaNet);
     const start = runningTotal;
-    runningTotal += step.deltaNet;
+    runningTotal += delta;
     items.push({
       label: step.label_he.replace('שינוי ', ''),
-      value: step.deltaNet,
-      delta: step.deltaNet,
+      value: delta,
+      delta,
       isTotal: false,
       start: Math.min(start, runningTotal),
       end: Math.max(start, runningTotal),
