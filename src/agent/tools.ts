@@ -62,7 +62,7 @@ const GROUP_MISSING: MissingFieldInfo = {
 /** Required fields per SPEC section 7. Pure; also used by the UI before calling the engine. */
 export function getMissingFields(
   prof: Partial<EmployeeProfile>,
-  _scenarioType: ScenarioType | 'general' = 'general' // every scenario needs the same fields today
+  scenarioType: ScenarioType | 'general' = 'general'
 ): MissingFieldInfo[] {
   // Order = the order the agent asks: group, base, car today, children, then the rest
   const missing: MissingFieldInfo[] = [];
@@ -78,8 +78,9 @@ export function getMissingFields(
   if (isUnset(prof.childrenUpTo23)) {
     missing.push({ field: 'childrenUpTo23', label_he: 'מספר ילדים עד גיל 23 (0 אם אין)', whyNeeded_he: 'לבדיקת זכאות למסלול ברוכת ילדים' });
   }
-  if (isBlank(prof.occupation)) {
-    missing.push({ field: 'occupation', label_he: 'עיסוק / תפקיד', whyNeeded_he: 'לקביעת קבוצת הזכאות, חובת רכב ואפשרות ויתור' });
+  // Occupation only matters for a waiver (may waive? maintenance amount); group is asked directly
+  if (scenarioType === 'waive_car' && isBlank(prof.occupation)) {
+    missing.push({ field: 'occupation', label_he: 'עיסוק / תפקיד', whyNeeded_he: 'לבדיקה אם מותר לוותר על הרכב ומהו סכום האחזקה' });
   }
   if (isUnset(prof.commissions)) {
     missing.push({ field: 'commissions', label_he: 'עמלות חודשיות (0 אם אין)', whyNeeded_he: 'חלק מההכנסה החייבת במס' });
@@ -124,7 +125,7 @@ export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
       properties: {
         base: { type: 'number', description: 'Monthly base salary (שכר בסיס חודשי)' },
         group: { type: 'string', description: 'Car eligibility group (קבוצת זכאות: א, ב, ג, ד)' },
-        occupation: { type: 'string', description: 'Job title / occupation (עיסוק/תפקיד)' },
+        occupation: { type: 'string', description: 'Job title / occupation (עיסוק/תפקיד). Needed only for a car waiver; does not set the eligibility group' },
         commissions: { type: 'number', description: 'Monthly commissions / sales incentives (עמלות)' },
         bonus: { type: 'number', description: 'Monthly bonus component (בונוס)' },
         pensionPct: { type: 'number', description: 'Employee pension deduction % (אחוז הפרשת עובד לפנסיה)' },
@@ -276,7 +277,6 @@ export async function executeTool(
         updates.occupation = args.occupation;
         const occ = findOccupation(args.occupation);
         if (occ) {
-          if (!updates.group && !context.profile.group) updates.group = occ.group;
           if (!updates.hasCar && occ.canWaive && updates.currentMaintenance === undefined) {
             updates.currentMaintenance = occ.maintenance;
           }
