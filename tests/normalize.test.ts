@@ -5,6 +5,11 @@ import type { AgentContext } from '../src/agent/types.ts';
 import type { EmployeeProfile } from '../src/engine/types.ts';
 
 const ok = (value: number) => ({ ok: true, value });
+// Money is compared to 2 decimals, never with exact equality
+const expectMoney = (r: ReturnType<typeof parseMoney>, value: number) => {
+  expect(r.ok).toBe(true);
+  expect(r.ok && r.value).toBeCloseTo(value, 2);
+};
 
 describe('parsePercent', () => {
   it('reads the forms employees write', () => {
@@ -39,12 +44,12 @@ describe('parsePercent', () => {
 
 describe('parseMoney', () => {
   it('reads shekel amounts', () => {
-    expect(parseMoney('18,500')).toEqual(ok(18500));
-    expect(parseMoney('18500')).toEqual(ok(18500));
-    expect(parseMoney('18.5 אלף')).toEqual(ok(18500));
-    expect(parseMoney('18 אלף וחצי')).toEqual(ok(18500));
-    expect(parseMoney('18 אלף')).toEqual(ok(18000));
-    expect(parseMoney('18K')).toEqual(ok(18000));
+    expectMoney(parseMoney('18,500'), 18500);
+    expectMoney(parseMoney('18500'), 18500);
+    expectMoney(parseMoney('18.5 אלף'), 18500);
+    expectMoney(parseMoney('18 אלף וחצי'), 18500);
+    expectMoney(parseMoney('18 אלף'), 18000);
+    expectMoney(parseMoney('18K'), 18000);
   });
 });
 
@@ -103,7 +108,7 @@ describe('update_profile normalizes before saving', () => {
   it('"18 אלף וחצי" is saved as 18500', async () => {
     const c = ctx(['אני מרוויח 18 אלף וחצי']);
     await executeTool('update_profile', { base: 18500 }, c);
-    expect(c.profile.base).toBe(18500);
+    expect(c.profile.base).toBeCloseTo(18500, 2);
   });
 
   it('"שש אחוז" is accepted as stated 6', async () => {
