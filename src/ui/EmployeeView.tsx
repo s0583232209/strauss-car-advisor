@@ -90,6 +90,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   const profileRef = useRef(profile);
   const lastComparisonRef = useRef(lastComparison);
   const messagesRef = useRef(messages);
+  // Fields the bot asked and the employee has not answered yet (the bot asks these again first)
+  const pendingFieldsRef = useRef<string[] | undefined>(undefined);
   profileRef.current = profile;
   lastComparisonRef.current = lastComparison;
   messagesRef.current = messages;
@@ -225,6 +227,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
           profile: { ...(override?.profile ?? profileRef.current) },
           lastComparison: lastComparisonRef.current,
           repParticipationMode,
+          pendingFields: pendingFieldsRef.current,
           onProfileUpdate: async (updates) => {
             const updated = { ...profileRef.current, ...updates };
             profileRef.current = updated;
@@ -265,6 +268,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         },
         (throttled) => setIsThrottled(throttled)
       );
+      pendingFieldsRef.current = turnResult.pendingFields;
 
       const assistantMsg: ChatMessage = {
         id: `ast-${Date.now()}`,

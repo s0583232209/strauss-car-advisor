@@ -6,8 +6,10 @@
 import catalogData from '../data/catalog.json';
 import occupationsData from '../data/occupations.json';
 import { canSelectCarGroup } from '../engine/rules.ts';
-import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
+import { buildScenario, findOccupation } from '../engine/scenario.ts';
 import { Car, ComparisonResult, EmployeeProfile, Occupation, ScenarioType } from '../engine/types.ts';
+import { carOnLine, nameScore, numberedLine, searchCars } from './carSearch.ts';
+import { describeValue, extractNumbers, normalizeField, NumericField } from './normalize.ts';
 import { getProfileFieldStatus } from './profileStatus.ts';
 import { AgentContext, MissingFieldInfo, ToolDefinition } from './types.ts';
 
@@ -64,8 +66,9 @@ export function getMissingFields(
     missing.push({ field: 'childrenUpTo23', label_he: 'מספר ילדים עד גיל 23 (0 אם אין)', whyNeeded_he: 'לבדיקת זכאות למסלול ברוכת ילדים' });
   }
   // Occupation only matters for a waiver (may waive? maintenance amount); group is asked directly
-  if (scenarioType === 'waive_car' && isBlank(prof.occupation)) {
-    missing.push({ field: 'occupation', label_he: 'עיסוק / תפקיד', whyNeeded_he: 'לבדיקה אם מותר לוותר על הרכב ומהו סכום האחזקה' });
+  // An occupation that is not on the list counts as missing: waiver rules must never be guessed
+  if (scenarioType === 'waive_car' && !findOccupation(prof.occupation)) {
+    missing.push({ field: 'occupation', label_he: 'עיסוק / תפקיד (מתוך רשימת העיסוקים)', whyNeeded_he: 'לבדיקה אם מותר לוותר על הרכב ומהו סכום האחזקה' });
   }
   if (isUnset(prof.commissions)) {
     missing.push({ field: 'commissions', label_he: 'עמלות חודשיות (0 אם אין)', whyNeeded_he: 'חלק מההכנסה החייבת במס' });
@@ -99,6 +102,60 @@ export function getMissingFields(
   }
 
   return missing;
+}
+
+const MAX_OCCUPATION_SUGGESTIONS = 5;
+
+/** Closest listed occupations to what the employee wrote ("מנהל" → every manager role) */
+function suggestOccupations(query: string): Occupation[] {
+  const scored = occupationsList
+    .map((o) => ({ o, score: nameScore(query, [o.occupation, o.occupation.replace(/\/(ית|ת|ה)(?=\s|$)/g, '')]) }))
+    .sort((a, b) => b.score - a.score);
+  // All names containing the query, else the closest few
+  const containing = scored.filter((s) => s.score >= 0.9);
+  return (containing.length > 0 ? containing : scored.slice(0, MAX_OCCUPATION_SUGGESTIONS)).map((s) => s.o);
+}
+
+/** How many missing fields the bot may ask in one message */
+export const ASK_AT_ONCE = 2;
+
+/** Fields only a payroll rep can supply; never asked from the employee (SPEC 7: lookup null → escalate) */
+const REP_ONLY_FIELDS = new Set(['currentBenefit']);
+
+/**
+ * Next fields to ask and the instruction for the model; empty object when nothing is missing.
+ * While a field asked in the previous message is still missing, only that field is asked again.
+ */
+export function nextQuestions(allMissing: MissingFieldInfo[], pendingFields: string[] = []) {
+  if (allMissing.length === 0) return {};
+  // The employee cannot know these (e.g. the benefit value of a car not in the catalog): a rep answers
+  const missing = allMissing.filter((m) => !REP_ONLY_FIELDS.has(m.field));
+  const forRep = allMissing.filter((m) => REP_ONLY_FIELDS.has(m.field));
+  if (missing.length === 0) {
+    return {
+      askNow: [],
+      forRep,
+      instruction: `חסר: ${forRep.map((m) => m.label_he).join('; ')}. העובד לא אמור לדעת את זה: אל תשאל אותו. קרא ל-escalate_to_rep, וספר לעובד בקצרה ששלחת שאלה לנציג ושתמשיך כשתגיע תשובה.`,
+    };
+  }
+  const unanswered = missing.filter((m) => pendingFields.includes(m.field));
+  const askNow = (unanswered.length > 0 ? unanswered : missing).slice(0, ASK_AT_ONCE);
+  const fields = askNow.map((m) => m.label_he).join('; ');
+  return {
+    next: askNow[0],
+    askNow,
+    instruction:
+      unanswered.length > 0
+        ? `העובד עוד לא ענה בבירור על: ${fields}. שאל שוב רק על זה, ואל תעבור לשאלה הבאה עד שתתקבל תשובה ברורה. אל תפנה לנציג בגלל זה ואל תניח ערך.`
+        : `שאל את העובד עכשיו, בהודעה אחת, רק על: ${fields}. אל תשאל על שדות נוספים בהודעה הזו. אלה נתונים שהעובד יודע: אל תפנה לנציג בגללם, אל תניח ערך ואל תחשב לפני שכל השדות מולאו.`,
+  };
+}
+
+/** nextQuestions, and remember what the bot is told to ask (pending for the next turn) */
+function askNext(missing: MissingFieldInfo[], context: AgentContext) {
+  const q = nextQuestions(missing, context.pendingFields);
+  context.askedFields = q.askNow?.map((m) => m.field) ?? [];
+  return q;
 }
 
 export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
@@ -146,7 +203,7 @@ export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        query: { type: 'string', description: 'Car model search query (e.g. "אטו", "קורולה", "טסלה", "קרניבל")' },
+        query: { type: 'string', description: 'Car name as the employee wrote it, Hebrew or English, or an exact catalog ID (e.g. "אטו", "קורולה", "טסלה", "CAR-06"). If the employee picked a number from your previous numbered list, pass that number ("1").' },
       },
       required: ['query'],
     },
@@ -184,7 +241,7 @@ export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'escalate_to_rep',
-    description: 'Opens a formal ticket to a human payroll representative when data is missing or exception requested.',
+    description: 'Opens a ticket to a human payroll representative. Use ONLY for what the employee cannot answer: a car not found in the catalog, an unknown benefit value, or an exception request. NEVER use it for missing salary, deduction, children or car fields: ask the employee for those.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -259,10 +316,14 @@ export async function executeTool(
       if (args.creditPoints !== undefined) updates.creditPoints = Number(args.creditPoints);
       if (args.childrenUpTo23 !== undefined) updates.childrenUpTo23 = Number(args.childrenUpTo23);
       if (args.hasCar !== undefined) updates.hasCar = Boolean(args.hasCar);
+      // Several catalog cars fit the name the employee gave ("קיה"): ask which one, save nothing yet
+      let currentCarChoices: Car[] = [];
       if (args.currentCarName !== undefined) {
-        updates.currentCarName = args.currentCarName;
-        // Auto fill benefit if matches catalog
-        const match = findCarByIdOrName(args.currentCarName);
+        const { matches } = searchCars(String(args.currentCarName));
+        const match = matches.length === 1 ? matches[0] : undefined;
+        if (matches.length > 1) currentCarChoices = matches;
+        else updates.currentCarName = args.currentCarName;
+        // Benefit comes from the catalog, never from the employee
         if (match) {
           updates.currentCarId = match.id;
           if (updates.currentBenefit === undefined && (isUnset(context.profile.currentBenefit) || context.profile.currentBenefit === 0)) {
@@ -277,9 +338,12 @@ export async function executeTool(
       if (args.currentBenefit !== undefined) updates.currentBenefit = Number(args.currentBenefit);
       if (args.currentMaintenance !== undefined) updates.currentMaintenance = Number(args.currentMaintenance);
 
+      // Only a listed occupation is saved (its official name); otherwise the employee picks from a list
+      let occupationChoices: Occupation[] = [];
       if (args.occupation !== undefined) {
-        updates.occupation = args.occupation;
         const occ = findOccupation(args.occupation);
+        if (!occ) occupationChoices = suggestOccupations(String(args.occupation));
+        else updates.occupation = occ.occupation;
         if (occ) {
           if (!updates.hasCar && occ.canWaive && updates.currentMaintenance === undefined) {
             updates.currentMaintenance = occ.maintenance;
@@ -301,15 +365,34 @@ export async function executeTool(
         // Keep this turn's view of the card current (React state updates are async)
         context.profile = { ...context.profile, ...updates };
       }
+      const understood = NUMERIC_PROFILE_FIELDS.filter((f) => typeof updates[f] === 'number').map((f) =>
+        describeValue(f, updates[f] as number)
+      );
       const res = {
         success: notSaved.length === 0 && needsConfirmation.length === 0,
         updated: updates,
         alreadyInCard,
+        // The bot confirms this briefly so the employee can correct it
+        ...(understood.length > 0 && { understood_he: `הבנתי: ${understood.join(', ')}` }),
+        ...(needsConfirmation.length > 0 && {
+          needsConfirmation,
+          askAgain_he: needsConfirmation.map((n) => n.question_he).join(' '),
+        }),
         ...(notSaved.length > 0 && {
           notSaved,
           message: `לא נשמר: ${notSaved.map((n) => n.field).join(', ')}. העובד לא כתב את הערכים האלה. אל תניח ערכים: שאל את העובד ישירות ובקש מספר מדויק.`,
         }),
         ...(alreadyInCard.length > 0 ? { note: 'שדות alreadyInCard כבר קיימים בכרטיס עם אותו ערך: אין לשאול או לעדכן אותם שוב.' } : {}),
+        ...(currentCarChoices.length > 0 && {
+          currentCarChoices: currentCarChoices.map((c) => ({ id: c.id, model: c.model, make: c.make })),
+          currentCarInstruction: `הרכב הנוכחי לא נשמר: כמה רכבים מתאימים ל-"${args.currentCarName}". הצג את currentCarChoices כרשימה ממוספרת ושאל איזה מהם.`,
+        }),
+        ...(occupationChoices.length > 0 && {
+          occupationChoices: occupationChoices.map((o) => o.occupation),
+          occupationInstruction: `העיסוק "${args.occupation}" לא נמצא ברשימת העיסוקים ולא נשמר. הצג את occupationChoices כרשימה ממוספרת ושאל איזה מהם מתאים. אל תבחר בשביל העובד ואל תאמר אם מותר לוותר. אם אף אחד לא מתאים – קרא ל-escalate_to_rep.`,
+        }),
+        // What is still missing after this update, so the bot keeps asking instead of jumping ahead
+        stillMissing: askNext(getMissingFields(context.profile), context),
       };
       return { result: res, outputTextForGuardrail: JSON.stringify(updates) };
     }
@@ -328,26 +411,34 @@ export async function executeTool(
         missing,
         isComplete: missing.length === 0,
         alreadyInCard,
-        ...(missing.length > 0 && {
-          next: missing[0],
-          instruction: `שאל את העובד על: ${missing[0].label_he}. אל תניח ערך ואל תחשב לפני שכל השדות מולאו.`,
-        }),
+        ...askNext(missing, context),
       };
       return { result: res, outputTextForGuardrail: JSON.stringify(res) };
     }
 
     case 'find_car': {
-      const q = String(args.query || '').trim().toLowerCase();
-      const matches = carsCatalog.filter((c) => {
-        const text = `${c.make} ${c.model} ${c.id} ${c.fuel}`.toLowerCase();
-        return text.includes(q) || q.includes(c.model.toLowerCase());
-      });
+      const q = String(args.query || '').trim();
+      let matches: Car[];
+      let suggestions: Car[] = [];
+      if (/^\d+$/.test(q)) {
+        // A list position ("1"): take that line of the bot's previous numbered list, never an ID substring
+        const line = numberedLine(context.lastBotText, Number(q));
+        const car = line ? carOnLine(line) : undefined;
+        matches = car ? [car] : [];
+      } else {
+        ({ matches, suggestions } = searchCars(q, context.profile.group));
+      }
 
       if (matches.length === 0) {
-        return {
-          result: { found: false, message: `לא נמצא רכב בקטלוג התואם ל-"${args.query}". אפשר לבקש רשימת רכבים זמינים.` },
-          outputTextForGuardrail: '0',
+        const res = {
+          found: false,
+          message:
+            suggestions.length > 0
+              ? `לא מצאתי בקטלוג רכב בשם "${args.query}". הצג לעובד את suggestions כרשימה ממוספרת ושאל לאיזה מהם התכוון. אל תבחר בשבילו.`
+              : `לא נמצא רכב בקטלוג התואם ל-"${args.query}". אפשר לבקש רשימת רכבים זמינים.`,
+          suggestions: suggestions.map((c) => ({ id: c.id, model: c.model, make: c.make, group: c.group, fuel: c.fuel })),
         };
+        return { result: res, outputTextForGuardrail: '0' };
       }
 
       const res = {
@@ -418,7 +509,8 @@ export async function executeTool(
         const res = {
           status: 'missing_fields',
           missing,
-          message: `לא ניתן לחשב: חסרים נתונים (${missing.map((m) => m.label_he).join(', ')}). יש לשאול עליהם קודם.`,
+          message: `לא ניתן לחשב: חסרים נתונים (${missing.map((m) => m.label_he).join(', ')}). יש לשאול עליהם את העובד קודם.`,
+          ...askNext(missing, context),
         };
         return { result: res, outputTextForGuardrail: '' };
       }
