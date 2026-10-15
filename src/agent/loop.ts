@@ -8,7 +8,8 @@ import { verifyNumbersInResponse } from './guard.ts';
 import { callLlm, LlmMessage } from './llm.ts';
 import { describeProfileCard } from './profileStatus.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
-import { AGENT_TOOLS_DEFINITIONS, executeTool } from './tools.ts';
+import { numberedLine } from './carSearch.ts';
+import { AGENT_TOOLS_DEFINITIONS, ASK_AT_ONCE, executeTool, getMissingFields } from './tools.ts';
 import { AgentContext } from './types.ts';
 
 /** Text that imitates a tool call ("[קריאה לכלי x]: ..." / "[תוצאת כלי x]: ...") instead of calling it */
@@ -17,6 +18,8 @@ const PSEUDO_TOOL_TEXT = /^\s*\[(קריאה לכלי|תוצאת כלי)\s/;
 export interface TurnResult {
   text: string;
   isThrottled?: boolean;
+  /** Fields the bot asked and the employee has not answered yet; pass back as context.pendingFields */
+  pendingFields?: string[];
 }
 
 /**
@@ -32,6 +35,20 @@ export async function runAgentTurn(
   const timeoutMs = 30000;
   const startTime = Date.now();
 
+  // A bare list choice ("1") is sent together with the list line it points to
+  const lastBotText = [...history].reverse().find((h) => h.role === 'assistant')?.content;
+  context.lastBotText = lastBotText;
+  const choice = userMessage.trim().match(/^\d+$/) ? numberedLine(lastBotText, Number(userMessage.trim())) : undefined;
+  const userMessageForModel = choice
+    ? `${userMessage} (בחירה מספר ${userMessage.trim()} מהרשימה שהצגת: "${choice}")`
+    : userMessage;
+
+  // Before any answer: the greeting asks the first fields on the missing list
+  if (context.pendingFields === undefined) {
+    context.pendingFields = getMissingFields(context.profile).slice(0, ASK_AT_ONCE).map((m) => m.field);
+  }
+  context.askedFields = undefined;
+
   const conversation: LlmMessage[] = [
     ...history
       .slice(-10)
@@ -41,7 +58,7 @@ export async function runAgentTurn(
         role: h.role === 'assistant' ? 'assistant' : 'user',
         content: h.content,
       })),
-    { role: 'user', content: userMessage },
+    { role: 'user', content: userMessageForModel },
   ];
   // Model that answered the previous call in this turn (thought signatures are model-specific)
   let turnModel: string | undefined;
@@ -61,7 +78,10 @@ export async function runAgentTurn(
   agentLog.turnStart(userMessage, context.profile, context.repParticipationMode);
   const finish = (reason: string, result: TurnResult): TurnResult => {
     agentLog.turnEnd(reason, result.text);
-    return result;
+    // What the tools told the bot to ask this turn, else what was pending before; only still-missing fields
+    const missingNow = new Set(getMissingFields(context.profile).map((m) => m.field));
+    const pending = (context.askedFields ?? context.pendingFields ?? []).filter((f) => missingNow.has(f));
+    return { ...result, pendingFields: pending };
   };
 
   while (loopCount < MAX_TOOL_CALLS) {
@@ -75,8 +95,8 @@ export async function runAgentTurn(
     agentLog.round(loopCount, MAX_TOOL_CALLS, Date.now() - startTime);
 
     // Fresh card snapshot every call, so the model sees what is already known
+    // Card values are already allowed by the guard through `profile`
     const card = describeProfileCard(context.profile);
-    allowedSourcesForGuardrail.push(card);
 
     const response = await callLlm({
       messages: conversation,
