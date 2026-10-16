@@ -139,6 +139,9 @@ export interface DeltaStep {
   key: 'benefit' | 'maintenance' | 'participation' | 'familyGap' | 'evGrossUp';
   label_he: string;
   deltaNet: number;
+  // Whole shekels for display; the steps' rounded values add up exactly to diffNet (roundStepsToTotal).
+  // Optional only for comparisons saved before 2026-10-14.
+  deltaNetRounded?: number;
   explanation_he: string;
 }
 

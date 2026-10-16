@@ -4,8 +4,9 @@
  */
 
 import catalogData from '../data/catalog.json';
+import occupationAliases from '../data/occupation-aliases.json';
 import occupationsData from '../data/occupations.json';
-import { buildDeltaSteps, buildPlainHebrewSummary } from './explain.ts';
+import { buildDeltaSteps, buildPlainHebrewSummary, roundStepsToTotal } from './explain.ts';
 import { calculateEVGrossUp, calculateNetBreakdown } from './net.ts';
 import { canSelectCarGroup, getGroupBudget, getRules } from './rules.ts';
 import {
@@ -32,12 +33,39 @@ export function findCarByIdOrName(query: string): Car | undefined {
   );
 }
 
-/** Find occupation info for an employee */
-export function findOccupation(occupationName: string): Occupation | undefined {
-  const clean = occupationName.trim();
-  return occupationsList.find(
-    (o) => o.occupation === clean || clean.includes(o.occupation) || o.occupation.includes(clean)
-  );
+// "נציג/ת" → "נציג", no quotes, lowercase, single spaces
+const normOccupation = (s: string) =>
+  s.replace(/\/(ית|ת|ה)(?=\s|$)/g, '').replace(/["'׳״]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+// Every word of the official occupation names ("נציג", "מכירות", "שטח", ...)
+const occupationWords = new Set(occupationsList.flatMap((o) => normOccupation(o.occupation).split(' ')));
+
+/** Feminine word forms to the listed form: "נציגה" → "נציג", "מנהלת" → "מנהל", "אנליסטית" → "אנליסט" */
+function baseWord(w: string): string {
+  if (occupationWords.has(w)) return w;
+  for (const suffix of ['ית', 'ת', 'ה']) {
+    if (w.endsWith(suffix) && occupationWords.has(w.slice(0, -suffix.length))) return w.slice(0, -suffix.length);
+  }
+  return w;
+}
+const occupationKey = (s: string) => normOccupation(s).split(' ').map(baseWord).join(' ');
+
+// Names that identify one occupation: the official name and its aliases, longest first
+const occupationNames = occupationsList
+  .flatMap((o) => [o.occupation, ...((occupationAliases as Record<string, string[]>)[o.occupation] ?? [])].map((n) => ({ key: occupationKey(n), occ: o })))
+  .sort((a, b) => b.key.length - a.key.length);
+
+/**
+ * Find occupation info for an employee. Matches the official name, its feminine form or a listed
+ * alias, also inside a sentence ("אני נציגת מכירות שטח"). A partial name ("מנהל") matches nothing:
+ * several occupations fit, and guessing could allow a waiver that is not allowed.
+ */
+export function findOccupation(occupationName: string | undefined): Occupation | undefined {
+  const key = occupationKey(occupationName ?? '');
+  if (!key) return undefined; // occupation is optional outside waive_car; '' must not match the first row
+  const exact = occupationNames.find((n) => n.key === key);
+  if (exact) return exact.occ;
+  return occupationNames.find((n) => ` ${key} `.includes(` ${n.key} `))?.occ;
 }
 
 /**
@@ -49,13 +77,8 @@ export function buildScenario(
   request: ScenarioRequest
 ): ComparisonResult {
   const rules = getRules();
-  const occ = findOccupation(profile.occupation) || {
-    occupation: profile.occupation,
-    group: profile.group,
-    carMandatory: false,
-    canWaive: true,
-    maintenance: profile.currentMaintenance || 1500,
-  };
+  // Unknown occupation: never assume a waiver is allowed or guess a maintenance amount
+  const occ = findOccupation(profile.occupation);
 
   const budget = getGroupBudget(profile.group);
 
@@ -111,15 +134,20 @@ export function buildScenario(
     altState.familyGapShare = todayState.familyGapShare;
     altState.evGrossUp = 0;
   } else if (request.type === 'waive_car') {
-    altCarLabel = `ויתור על רכב ואחזקת רכב (${occ.maintenance.toLocaleString()} ₪)`;
-    if (occ.carMandatory || !occ.canWaive) {
+    if (!occ) {
+      altCarLabel = 'ויתור על רכב (העיסוק לא זוהה)';
+      eligible = false;
+      eligibilityReason_he = `העיסוק "${profile.occupation ?? ''}" לא זוהה ברשימת העיסוקים, ולכן אי אפשר לקבוע אם מותר לוותר על הרכב ומהו סכום האחזקה. יש לבחור עיסוק מהרשימה או לפנות לנציג שכר.`;
+    } else if (occ.carMandatory || !occ.canWaive) {
+      altCarLabel = `ויתור על רכב ואחזקת רכב (${occ.maintenance.toLocaleString()} ₪)`;
       eligible = false;
       eligibilityReason_he = `עיסוקך (${occ.occupation}) מוגדר כבעל רכב חובה תפעולי ואינו מאפשר ויתור על הרכב. באפשרותך לבחור רכב אחר, לעבור לרכב חשמלי או לבחור במסלול משפחתי.`;
     } else {
+      altCarLabel = `ויתור על רכב ואחזקת רכב (${occ.maintenance.toLocaleString()} ₪)`;
       eligibilityReason_he = 'העיסוק שלך מאפשר ויתור על רכב חברה כנגד דמי אחזקת רכב לפי הנהלים.';
     }
     altState.benefitValue = 0;
-    altState.maintenance = occ.maintenance;
+    altState.maintenance = occ?.maintenance ?? 0;
     altState.participation = 0;
     altState.familyGapShare = 0;
     altState.evGrossUp = 0;
@@ -210,10 +238,12 @@ export function buildScenario(
   const exactDiff = altBreakdown.net - todayBreakdown.net;
 
   // 5. Delta Steps and Explanations
-  const { steps, sumSteps } =
+  const { steps: exactSteps, sumSteps } =
     request.type === 'keep'
       ? { steps: [], sumSteps: 0 }
       : buildDeltaSteps(todayState, altState);
+  // Displayed (whole-shekel) steps add up exactly to the displayed difference
+  const steps = roundStepsToTotal(exactSteps, diffNet);
 
   // SPEC 3.3: the delta steps must add up to the exact net difference.
   if (Math.abs(sumSteps - exactDiff) > 1e-6) {

@@ -21,8 +21,8 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { runAgentTurn } from '../agent/loop.ts';
+import { buildOpeningMessage } from '../agent/profileStatus.ts';
 import { getMissingFields } from '../agent/tools.ts';
-import { OPENING_MESSAGE } from '../agent/prompt.ts';
 import employeesData from '../data/employees.json';
 import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
 import { ComparisonResult, EligibilityGroup, EmployeeProfile } from '../engine/types.ts';
@@ -72,6 +72,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  // What the agent is doing right now (shown in the typing indicator)
+  const [agentStatus, setAgentStatus] = useState('');
   const [isThrottled, setIsThrottled] = useState(false);
 
   // State: Last Comparison
@@ -90,6 +92,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   const profileRef = useRef(profile);
   const lastComparisonRef = useRef(lastComparison);
   const messagesRef = useRef(messages);
+  // Fields the bot asked and the employee has not answered yet (the bot asks these again first)
+  const pendingFieldsRef = useRef<string[] | undefined>(undefined);
   profileRef.current = profile;
   lastComparisonRef.current = lastComparison;
   messagesRef.current = messages;
@@ -119,7 +123,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
         const greeting: ChatMessage = {
           id: 'msg-0',
           role: 'assistant',
-          content: OPENING_MESSAGE,
+          content: buildOpeningMessage(emptyProfile()),
           timestamp: Date.now(),
         };
         setMessages([greeting]);
@@ -211,6 +215,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
       await storage.addMessage(sessionId, userMsg);
     }
 
+    setAgentStatus('');
     setIsTyping(true);
 
     // Comparison computed during this turn (attached to the assistant message)
@@ -225,6 +230,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
           profile: { ...(override?.profile ?? profileRef.current) },
           lastComparison: lastComparisonRef.current,
           repParticipationMode,
+          pendingFields: pendingFieldsRef.current,
           onProfileUpdate: async (updates) => {
             const updated = { ...profileRef.current, ...updates };
             profileRef.current = updated;
@@ -263,8 +269,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
             return ticketId;
           },
         },
-        (throttled) => setIsThrottled(throttled)
+        (throttled) => setIsThrottled(throttled),
+        setAgentStatus
       );
+      pendingFieldsRef.current = turnResult.pendingFields;
 
       const assistantMsg: ChatMessage = {
         id: `ast-${Date.now()}`,
@@ -326,7 +334,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
     const greeting: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'assistant',
-      content: OPENING_MESSAGE,
+      content: buildOpeningMessage(emptyProfile()),
       timestamp: Date.now(),
     };
     const cleared = emptyProfile();
@@ -543,7 +551,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                 <div className="flex justify-end">
                   <div className="bg-white border border-line shadow-xs rounded-2xl px-4 py-2.5 rounded-bl-xs flex items-center gap-2 text-muted text-xs font-medium">
                     <Pinwheel className="w-6 h-6" spin />
-                    <span>מחשב נתונים במנוע השכר...</span>
+                    <span>{agentStatus || 'מחשב נתונים במנוע השכר...'}</span>
                   </div>
                 </div>
               )}

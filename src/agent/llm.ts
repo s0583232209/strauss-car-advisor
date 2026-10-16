@@ -23,7 +23,17 @@ export interface LlmCallOptions {
   inlineData?: { mimeType: string; data: string };
   /** Model that produced the previous turn; the server tries it first */
   preferredModel?: string;
+  /** Epoch ms after which no request, retry or fallback is started; then LlmDeadlineError is thrown */
+  deadline?: number;
   onThrottled?: (isThrottled: boolean, message?: string) => void;
+}
+
+/** The caller's time limit ran out before the model answered */
+export class LlmDeadlineError extends Error {
+  constructor() {
+    super('LLM call exceeded the turn deadline');
+    this.name = 'LlmDeadlineError';
+  }
 }
 
 export interface LlmCallResult {
@@ -59,8 +69,15 @@ export async function callLlm(options: LlmCallOptions): Promise<LlmCallResult> {
   const maxTries = 4;
   let delay = 1000;
   let lastError: Error | null = null;
+  const deadline = options.deadline ?? Infinity;
+  const timeLeft = () => deadline - Date.now();
+  const deadlineHit = (): LlmDeadlineError => {
+    options.onThrottled?.(false);
+    return new LlmDeadlineError();
+  };
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
+    if (timeLeft() <= 0) throw deadlineHit();
     try {
       const response = await fetch('/api/gemini/generate', {
         method: 'POST',
@@ -73,7 +90,11 @@ export async function callLlm(options: LlmCallOptions): Promise<LlmCallResult> {
           responseSchema: options.responseSchema,
           inlineData: options.inlineData,
           preferredModel: options.preferredModel,
+          // The server stops trying models when this runs out
+          ...(Number.isFinite(deadline) && { budgetMs: timeLeft() }),
         }),
+        // A second of grace so the server's own budget error arrives first
+        ...(Number.isFinite(deadline) && { signal: AbortSignal.timeout(timeLeft() + 1000) }),
       });
 
       if (response.status === 429 || response.status === 503) {
@@ -81,6 +102,7 @@ export async function callLlm(options: LlmCallOptions): Promise<LlmCallResult> {
           true,
           'המערכת מתמודדת עם עומס בקשות זמני (429/503). ממתינים מעט ומנסים שנית...'
         );
+        if (timeLeft() <= delay) throw deadlineHit();
         if (attempt === maxTries) {
           // Try fallback if available
           const fallbackRes = await tryFallbackProvider(options);
@@ -109,6 +131,9 @@ export async function callLlm(options: LlmCallOptions): Promise<LlmCallResult> {
 
       return result;
     } catch (err: any) {
+      if (err instanceof LlmDeadlineError) throw err;
+      // Out of time (also a fetch aborted by the deadline signal): no retry, no fallback
+      if (timeLeft() <= delay) throw deadlineHit();
       lastError = err;
       if (attempt === maxTries) break;
       await sleep(delay);
@@ -116,6 +141,7 @@ export async function callLlm(options: LlmCallOptions): Promise<LlmCallResult> {
     }
   }
 
+  if (timeLeft() <= 0) throw deadlineHit();
   // Attempt fallback provider before failing
   const fallbackRes = await tryFallbackProvider(options);
   if (fallbackRes) {
