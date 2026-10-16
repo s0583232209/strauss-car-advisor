@@ -16,6 +16,9 @@ import { AgentContext } from './types.ts';
 /** Text that imitates a tool call ("[קריאה לכלי x]: ..." / "[תוצאת כלי x]: ...") instead of calling it */
 const PSEUDO_TOOL_TEXT = /^\s*\[(קריאה לכלי|תוצאת כלי)\s/;
 
+/** Fallback when the turn ends without a usable answer and there is no comparison card to point to */
+const NO_CARD_FALLBACK = 'סליחה, לא הצלחתי לעבד את התשובה האחרונה. אפשר לכתוב אותה שוב?';
+
 export interface TurnResult {
   text: string;
   isThrottled?: boolean;
@@ -27,7 +30,10 @@ export interface TurnResult {
 export const STATUS_THINKING_HE = 'קורא את ההודעה...';
 export const STATUS_WRITING_HE = 'מנסח תשובה...';
 
-const TIMEOUT_TEXT = 'הבקשה ארכה מעל לזמן המותר (30 שניות). מוצגים נתוני ההשוואה העדכניים שנשמרו עד כה.';
+const timeoutText = (hasCard: boolean) =>
+  hasCard
+    ? 'הבקשה ארכה מעל לזמן המותר (30 שניות). מוצגים נתוני ההשוואה העדכניים שנשמרו עד כה.'
+    : 'הבקשה ארכה מעל לזמן המותר (30 שניות). הנתונים שמסרת עד עכשיו נשמרו בפרופיל; אפשר לכתוב את התשובה האחרונה שוב?';
 
 /**
  * Runs a complete agent conversation turn with local tool execution,
@@ -85,6 +91,8 @@ export async function runAgentTurn(
   const MAX_TOOL_CALLS = 6;
   // Tool calls already executed in this turn (name + args), to block repeat loops
   const executedCalls = new Set<string>();
+  // Only mention "the card below" when there is one (from this turn or an earlier one)
+  let hasCard = Boolean(context.lastComparison);
 
   agentLog.turnStart(userMessage, context.profile, context.repParticipationMode);
   const finish = (reason: string, result: TurnResult): TurnResult => {
@@ -114,7 +122,7 @@ export async function runAgentTurn(
 
   while (loopCount < MAX_TOOL_CALLS) {
     if (Date.now() >= deadline) {
-      return finish('timeout after 30s', { text: TIMEOUT_TEXT });
+      return finish('timeout after 30s', { text: timeoutText(hasCard) });
     }
 
     loopCount++;
@@ -136,7 +144,7 @@ export async function runAgentTurn(
         onThrottled,
       });
     } catch (err) {
-      if (err instanceof LlmDeadlineError) return finish('timeout after 30s (inside a model call)', { text: TIMEOUT_TEXT });
+      if (err instanceof LlmDeadlineError) return finish('timeout after 30s (inside a model call)', { text: timeoutText(hasCard) });
       agentLog.turnEnd(`error: ${err instanceof Error ? err.message : String(err)}`, '');
       throw err;
     }
@@ -166,6 +174,9 @@ export async function runAgentTurn(
 
         if (outputTextForGuardrail) {
           toolOutputsThisTurn.push(outputTextForGuardrail);
+        }
+        if (call.name === 'run_comparison' && ['calculated', 'pending_rep'].includes(result?.status)) {
+          hasCard = true;
         }
 
         // functionResponse.response must be a JSON object
@@ -215,18 +226,20 @@ export async function runAgentTurn(
     if (loopCount < MAX_TOOL_CALLS) {
       conversation.push({
         role: 'user',
-        content: `שים לב: אסור להמציא או לחשב מספרים בעצמך. המספרים ${guardrail.inventedNumbers.join(', ')} לא הופיעו בנתוני המערכת. נסח מחדש בקצרה בלי מספרים מומצאים, או הפנה לכרטיס ההשוואה המופיע מטה.`,
+        content: `שים לב: אסור להמציא או לחשב מספרים בעצמך, וגם לא לתת מספרים לדוגמה. המספרים ${guardrail.inventedNumbers.join(', ')} לא הופיעו בנתוני המערכת. נסח מחדש בקצרה בלי מספרים מומצאים${
+          hasCard ? ', או הפנה לכרטיס ההשוואה המופיע מטה' : ''
+        }.`,
       });
       continue;
     }
 
     // If still failing after regeneration attempts, provide safe fallback
     return finish('number guard failed on last round', {
-      text: 'מצורף למטה כרטיס השוואת השכר המפורט ומדויק על פי נתוני המחשבון:',
+      text: hasCard ? 'מצורף למטה כרטיס השוואת השכר המפורט ומדויק על פי נתוני המחשבון:' : NO_CARD_FALLBACK,
     });
   }
 
   return finish(`hit the ${MAX_TOOL_CALLS}-round limit (loop)`, {
-    text: 'סיימתי את חישוב הנתונים. כרטיס ההשוואה המלא מופיע למטה.',
+    text: hasCard ? 'סיימתי את חישוב הנתונים. כרטיס ההשוואה המלא מופיע למטה.' : NO_CARD_FALLBACK,
   });
 }

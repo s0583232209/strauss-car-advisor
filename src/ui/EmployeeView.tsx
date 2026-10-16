@@ -726,6 +726,14 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
             {/* Deductions & Credit Points */}
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-slate-500 block text-[11px]">עמלות חודשיות:</span>
+                <span className="font-bold text-slate-900">{profile.commissions === undefined ? 'חסר' : `${profile.commissions.toLocaleString()} ₪`}</span>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-slate-500 block text-[11px]">בונוס חודשי:</span>
+                <span className="font-bold text-slate-900">{profile.bonus === undefined ? 'חסר' : `${profile.bonus.toLocaleString()} ₪`}</span>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">הפרשת פנסיה:</span>
                 <span className="font-bold text-slate-900">{profile.pensionPct === undefined ? 'חסר' : `${profile.pensionPct}%`}</span>
               </div>
