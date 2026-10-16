@@ -72,6 +72,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  // What the agent is doing right now (shown in the typing indicator)
+  const [agentStatus, setAgentStatus] = useState('');
   const [isThrottled, setIsThrottled] = useState(false);
 
   // State: Last Comparison
@@ -213,6 +215,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
       await storage.addMessage(sessionId, userMsg);
     }
 
+    setAgentStatus('');
     setIsTyping(true);
 
     // Comparison computed during this turn (attached to the assistant message)
@@ -266,7 +269,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
             return ticketId;
           },
         },
-        (throttled) => setIsThrottled(throttled)
+        (throttled) => setIsThrottled(throttled),
+        setAgentStatus
       );
       pendingFieldsRef.current = turnResult.pendingFields;
 
@@ -547,7 +551,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                 <div className="flex justify-end">
                   <div className="bg-white border border-line shadow-xs rounded-2xl px-4 py-2.5 rounded-bl-xs flex items-center gap-2 text-muted text-xs font-medium">
                     <Pinwheel className="w-6 h-6" spin />
-                    <span>מחשב נתונים במנוע השכר...</span>
+                    <span>{agentStatus || 'מחשב נתונים במנוע השכר...'}</span>
                   </div>
                 </div>
               )}

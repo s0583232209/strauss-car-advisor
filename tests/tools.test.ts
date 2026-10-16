@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { carOnLine, numberedLine, searchCars } from '../src/agent/carSearch.ts';
-import { executeTool } from '../src/agent/tools.ts';
+import { AGENT_TOOLS_DEFINITIONS, executeTool, toolStatus } from '../src/agent/tools.ts';
 import type { AgentContext } from '../src/agent/types.ts';
 import type { EmployeeProfile } from '../src/engine/types.ts';
 
@@ -53,6 +53,13 @@ describe('asking for missing fields', () => {
     };
     const { result } = await executeTool('update_profile', { creditPoints: 2.25 }, ctx(full, ['2.25 נקודות']));
     expect(result.stillMissing).toEqual({});
+    expect(result.nextStep_he).toContain('run_comparison');
+  });
+
+  it('update_profile with fields still missing does not push to run_comparison', async () => {
+    const c = ctx({ group: 'ב', base: 14200, hasCar: true, currentCarName: 'KONA EV' }, ['0']);
+    const { result } = await executeTool('update_profile', { commissions: 0, childrenUpTo23: 0 }, c);
+    expect(result.nextStep_he).toBeUndefined();
   });
 
   it('run_comparison on missing fields tells the bot to ask the employee, not a rep', async () => {
@@ -156,5 +163,11 @@ describe('the benefit value (שווי שימוש) is never asked from the employ
     const { result } = await executeTool('update_profile', { currentCarName: 'קיה' }, c);
     expect(c.profile.currentCarName).toBeUndefined();
     expect(result.currentCarChoices.length).toBeGreaterThan(1);
+  });
+});
+
+describe('tool status shown to the employee', () => {
+  it('every tool has its own Hebrew status line', () => {
+    for (const t of AGENT_TOOLS_DEFINITIONS) expect(toolStatus(t.name)).not.toBe(toolStatus('no_such_tool'));
   });
 });
