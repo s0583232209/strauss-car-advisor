@@ -158,6 +158,20 @@ function askNext(missing: MissingFieldInfo[], context: AgentContext) {
   return q;
 }
 
+/** What the employee sees while a tool runs (chat typing indicator) */
+const TOOL_STATUS_HE: Record<string, string> = {
+  update_profile: 'שומר את הנתונים שמסרת...',
+  get_missing_fields: 'בודק אילו נתונים חסרים...',
+  find_car: 'מחפש את הרכב בקטלוג...',
+  list_options: 'מחפש רכבים שמתאימים לך...',
+  run_comparison: 'מחשב נתונים במנוע השכר...',
+  escalate_to_rep: 'פותח פנייה לנציג שכר...',
+};
+
+export function toolStatus(name: string): string {
+  return TOOL_STATUS_HE[name] ?? 'מעבד את הבקשה...';
+}
+
 export const AGENT_TOOLS_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'update_profile',
@@ -394,6 +408,12 @@ export async function executeTool(
         // What is still missing after this update, so the bot keeps asking instead of jumping ahead
         stillMissing: askNext(getMissingFields(context.profile), context),
       };
+      // Nothing left to ask: go straight to the calculation instead of an extra "shall I calculate?" message
+      if (getMissingFields(context.profile).length === 0) {
+        Object.assign(res, {
+          nextStep_he: 'כל הנתונים הנדרשים קיימים בכרטיס. אם העובד כבר ציין תרחיש, הפעל עכשיו run_comparison בלי לשאול אם לחשב.',
+        });
+      }
       return { result: res, outputTextForGuardrail: JSON.stringify(updates) };
     }
 

@@ -28,8 +28,9 @@ const geminiModels = (process.env.GEMINI_MODEL || 'gemini-3.8-flash')
   .filter(Boolean);
 // Kept well below the agent's 30s turn limit (src/agent/loop.ts) so a hanging model still leaves time to fall back
 const MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS) || 10000;
-// Skip a model for a while after it fails, so each agent turn does not re-hit an exhausted model
-const COOLDOWN_MS: Record<number, number> = { 429: 60000, 503: 30000, 404: 600000, 408: 60000 };
+// Skip a model for a while after it fails, so each agent turn does not re-hit an exhausted model.
+// A timeout (408) costs a full MODEL_TIMEOUT_MS per call, so a slow model is skipped for 10 minutes
+const COOLDOWN_MS: Record<number, number> = { 429: 60000, 503: 30000, 404: 600000, 408: 600000 };
 const modelCooldownUntil = new Map<string, number>();
 
 const ai = new GoogleGenAI({
@@ -41,12 +42,17 @@ const ai = new GoogleGenAI({
   },
 });
 
-/** Calls generateContent on the first available model, falling back on 429/503/404/timeout. */
+/**
+ * Calls generateContent on the first available model, falling back on 429/503/404/timeout.
+ * budgetMs (optional): total time left for the caller; no model is started or waited for beyond it.
+ */
 async function generateWithFallback(
   params: Omit<Parameters<typeof ai.models.generateContent>[0], 'model'>,
-  preferredModel?: string
+  preferredModel?: string,
+  budgetMs?: number
 ): Promise<{ response: Awaited<ReturnType<typeof ai.models.generateContent>>; model: string }> {
   const now = Date.now();
+  const deadline = budgetMs && budgetMs > 0 ? now + budgetMs : Infinity;
   const available = geminiModels.filter((m) => (modelCooldownUntil.get(m) || 0) <= now);
   // If every model is cooling down, still try them all rather than failing immediately
   let candidates = available.length > 0 ? available : geminiModels;
@@ -57,8 +63,12 @@ async function generateWithFallback(
   let lastError: any = null;
 
   for (const model of candidates) {
+    const left = deadline - Date.now();
+    if (left <= 0) break;
+    // Cut short by the caller's budget, not by the model: such a timeout says nothing about the model
+    const cutByBudget = left < MODEL_TIMEOUT_MS;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), MODEL_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), Math.min(MODEL_TIMEOUT_MS, left));
     try {
       const response = await ai.models.generateContent({
         ...params,
@@ -75,11 +85,15 @@ async function generateWithFallback(
         ? Object.assign(new Error(`Gemini model ${model} timed out after ${MODEL_TIMEOUT_MS}ms`), { status: 503 })
         : error;
       if (!(status in COOLDOWN_MS)) throw error; // not a capacity/model problem: do not mask it
+      if (timedOut && cutByBudget) break;
       modelCooldownUntil.set(model, Date.now() + COOLDOWN_MS[status]);
       console.warn(`Gemini model ${model} unavailable (${status}); trying next model`);
     } finally {
       clearTimeout(timer);
     }
+  }
+  if (Date.now() >= deadline) {
+    throw Object.assign(new Error('The caller time budget ran out before a model answered'), { status: 504 });
   }
   throw lastError || new Error('No Gemini model available');
 }
@@ -101,7 +115,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Endpoint: LLM content generation & function calling
 app.post('/api/gemini/generate', async (req: Request, res: Response) => {
   try {
-    const { messages, tools, systemInstruction, responseMimeType, responseSchema, inlineData, preferredModel } =
+    const { messages, tools, systemInstruction, responseMimeType, responseSchema, inlineData, preferredModel, budgetMs } =
       req.body;
 
     // Convert tool declarations to GenAI format if provided
@@ -168,7 +182,8 @@ app.post('/api/gemini/generate', async (req: Request, res: Response) => {
         contents: contents.length > 0 ? contents : 'שלום',
         config,
       },
-      typeof preferredModel === 'string' ? preferredModel : undefined
+      typeof preferredModel === 'string' ? preferredModel : undefined,
+      typeof budgetMs === 'number' ? budgetMs : undefined
     );
 
     // Check for function calls
