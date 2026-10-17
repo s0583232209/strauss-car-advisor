@@ -16,15 +16,20 @@ import {
   User,
   XCircle,
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
-import { StorageAdapter, SupportTicket } from '../store/types.ts';
+import React, { useCallback, useEffect, useState } from 'react';
+import type { SupportTicket } from '../../shared/types.ts';
+import { accessToken, api, ApiError } from '../api/client.ts';
+import { AccessGate } from './AccessGate.tsx';
 
-interface RepresentativeViewProps {
-  storage: StorageAdapter;
-}
+// How often the queue is refreshed from the server
+const POLL_INTERVAL_MS = 3000;
 
-export const RepresentativeView: React.FC<RepresentativeViewProps> = ({ storage }) => {
+export const RepresentativeView: React.FC = () => {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  // The server asked for an access code (or rejected the one given)
+  const [locked, setLocked] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'answered' | 'closed'>('all');
 
@@ -34,16 +39,34 @@ export const RepresentativeView: React.FC<RepresentativeViewProps> = ({ storage 
   const [effectiveFrom, setEffectiveFrom] = useState<string>('1/1');
   const [isSending, setIsSending] = useState(false);
 
-  // Subscribe to tickets list
-  useEffect(() => {
-    const unsub = storage.onTicketsChange((all) => {
+  const handleApiError = (err: unknown) => {
+    if (err instanceof ApiError && err.status === 401) {
+      setLockError(accessToken.get('rep') ? 'קוד הגישה שגוי' : null);
+      accessToken.set('rep', null);
+      setLocked(true);
+      return;
+    }
+    setLoadError(err instanceof Error ? err.message : 'שגיאה בטעינת הפניות');
+  };
+
+  const refresh = useCallback(async () => {
+    try {
+      const all = await api.tickets.list();
       setTickets(all);
-      if (all.length > 0 && !selectedTicketId) {
-        setSelectedTicketId(all[0].id);
-      }
-    });
-    return () => unsub();
-  }, [storage, selectedTicketId]);
+      setLoadError(null);
+      setSelectedTicketId((current) => current ?? all[0]?.id ?? null);
+    } catch (err) {
+      handleApiError(err);
+    }
+  }, []);
+
+  // Poll the ticket queue while the screen is unlocked
+  useEffect(() => {
+    if (locked) return;
+    refresh();
+    const timer = setInterval(refresh, POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [locked, refresh]);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0] || null;
 
@@ -52,20 +75,18 @@ export const RepresentativeView: React.FC<RepresentativeViewProps> = ({ storage 
     setIsSending(true);
 
     try {
-      const updated: SupportTicket = {
-        ...selectedTicket,
+      const value = structuredValue ? parseFloat(structuredValue) : undefined;
+      const updated = await api.tickets.answer(selectedTicket.id, {
         status,
-        answeredAt: Date.now(),
-        answer: {
-          text: replyText.trim() || 'פנייתך נבדקה ואושרה במערכת.',
-          value: structuredValue ? parseFloat(structuredValue) : undefined,
-          effectiveFrom: effectiveFrom.trim() || undefined,
-        },
-      };
-
-      await storage.saveTicket(updated);
+        text: replyText.trim() || undefined,
+        value: value !== undefined && Number.isFinite(value) ? value : undefined,
+        effectiveFrom: effectiveFrom.trim() || undefined,
+      });
+      setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       setReplyText('');
       setStructuredValue('');
+    } catch (err) {
+      handleApiError(err);
     } finally {
       setIsSending(false);
     }
@@ -76,8 +97,24 @@ export const RepresentativeView: React.FC<RepresentativeViewProps> = ({ storage 
     return t.status === filterStatus;
   });
 
+  if (locked) {
+    return (
+      <AccessGate
+        role="rep"
+        error={lockError}
+        onUnlocked={() => {
+          setLockError(null);
+          setLocked(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {loadError && (
+        <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger font-medium">{loadError}</div>
+      )}
       {/* Top Header */}
       <div className="flex items-center justify-between pb-6 border-b border-line mb-6">
         <div>

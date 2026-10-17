@@ -1,47 +1,47 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { callLlm, LlmDeadlineError } from '../src/agent/llm.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { callLlm, configureLlm, LlmDeadlineError } from '../server/bl/agent/llm.ts';
 
-const reply = (status: number, body: unknown = {}) =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
+/** A transport failure as the Gemini client throws it */
+const statusError = (status: number) => Object.assign(new Error(`status ${status}`), { status });
 
 describe('callLlm deadline', () => {
-  it('a passed deadline throws LlmDeadlineError without calling the server', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+  it('a passed deadline throws LlmDeadlineError without calling the model', async () => {
+    const transport = vi.fn();
+    configureLlm({ transport });
     await expect(
       callLlm({ messages: [{ role: 'user', content: 'deadline-passed' }], deadline: Date.now() - 1 })
     ).rejects.toBeInstanceOf(LlmDeadlineError);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(transport).not.toHaveBeenCalled();
   });
 
   it('a 503 with no time left for the backoff does not retry', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(reply(503));
-    vi.stubGlobal('fetch', fetchMock);
+    const transport = vi.fn().mockRejectedValue(statusError(503));
+    configureLlm({ transport });
     await expect(
       callLlm({ messages: [{ role: 'user', content: 'no-time-to-retry' }], deadline: Date.now() + 500 })
     ).rejects.toBeInstanceOf(LlmDeadlineError);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledTimes(1);
   });
 
-  it('sends the time left to the server as budgetMs', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(reply(200, { text: 'שלום' }));
-    vi.stubGlobal('fetch', fetchMock);
+  it('sends the time left to the model client as budgetMs', async () => {
+    const transport = vi.fn().mockResolvedValue({ text: 'שלום' });
+    configureLlm({ transport });
     const res = await callLlm({ messages: [{ role: 'user', content: 'budget' }], deadline: Date.now() + 20000 });
     expect(res.text).toBe('שלום');
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.budgetMs).toBeGreaterThan(0);
-    expect(body.budgetMs).toBeLessThanOrEqual(20000);
+    const request = transport.mock.calls[0][0];
+    expect(request.budgetMs).toBeGreaterThan(0);
+    expect(request.budgetMs).toBeLessThanOrEqual(20000);
   });
 
   it('without a deadline no budget is sent', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(reply(200, { text: 'ok' }));
-    vi.stubGlobal('fetch', fetchMock);
+    const transport = vi.fn().mockResolvedValue({ text: 'ok' });
+    configureLlm({ transport });
     await callLlm({ messages: [{ role: 'user', content: 'no-deadline' }] });
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).budgetMs).toBeUndefined();
+    expect(transport.mock.calls[0][0].budgetMs).toBeUndefined();
+  });
+
+  it('fails clearly when no transport is configured', async () => {
+    configureLlm({ transport: undefined as never });
+    await expect(callLlm({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow('not configured');
   });
 });

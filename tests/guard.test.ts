@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { verifyNumbersInResponse } from '../src/agent/guard.ts';
+import { verifyNumbersInResponse } from '../server/bl/agent/guard.ts';
 
 const tool = '{"todayNet":11032.4,"altNet":11692.82,"diff":660.42,"evGrossUp":440}';
 

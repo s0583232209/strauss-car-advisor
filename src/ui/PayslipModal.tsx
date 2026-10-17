@@ -14,8 +14,9 @@ import {
   X,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { ExtractedPayslipData } from '../agent/extract.ts';
-import { EmployeeProfile } from '../engine/types.ts';
+import type { ExtractedPayslipData } from '../../shared/types.ts';
+import { api } from '../api/client.ts';
+import { EmployeeProfile } from '../../shared/types.ts';
 
 interface PayslipModalProps {
   isOpen: boolean;
@@ -65,17 +66,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
       const base64Data = await base64Promise;
       const mimeType = file.type || 'image/jpeg';
 
-      const response = await fetch('/api/gemini/extract-payslip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileData: base64Data, mimeType }),
-      });
-
-      if (!response.ok) {
-        throw new Error('שגיאה בתקשורת עם שרת הפענוח');
-      }
-
-      const data: ExtractedPayslipData = await response.json();
+      const data: ExtractedPayslipData = await api.payslip.extract(base64Data, mimeType);
       setExtractedData(data);
 
       // Populate editable initial state

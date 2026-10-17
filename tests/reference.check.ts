@@ -9,10 +9,10 @@
  * Expected values are copied from SPEC 8.1 and must never be edited to pass.
  * Exit code 1 if any check fails.
  */
-import { calculateEVGrossUp, calculateNetBreakdown } from '../src/engine/net.ts';
-import { buildScenario } from '../src/engine/scenario.ts';
-import type { EmployeeProfile, TaxCalculationInputs } from '../src/engine/types.ts';
-import employees from '../src/data/employees.json';
+import { calculateEVGrossUp, calculateNetBreakdown } from '../server/bl/engine/net.ts';
+import { buildScenario } from '../server/bl/engine/scenario.ts';
+import type { EmployeeProfile, TaxCalculationInputs } from '../server/bl/engine/types.ts';
+import employees from '../server/data/employees.json';
 
 type Emp = Pick<TaxCalculationInputs, 'base' | 'commissions' | 'bonus' | 'pensionPct' | 'studyFundPct' | 'creditPoints'>;
 type Car = { benefit: number; participation: number } | { maintenance: number };
@@ -120,7 +120,7 @@ console.log(table.join('\n'));
 const green = Object.values(stateResults).filter((r) => r.pass).length;
 console.log(`\nStates fully green (net+tax+NI within ±1): ${green}/12`);
 
-console.log('\n=== B. Same 6 comparisons through buildScenario (sample employees from src/data) ===');
+console.log('\n=== B. Same 6 comparisons through buildScenario (sample employees from server/data) ===');
 table.length = 0;
 for (const c of CASES) {
   const emp = (employees as EmployeeProfile[]).find((e) => e.id === c.scenario.id)!;
@@ -153,12 +153,12 @@ const probes: Array<[string, boolean, string]> = [];
   const r = buildScenario(eli, { type: 'keep' });
   probes.push(["'keep' scenario shows no change", r.diffNet === 0, `alt="${r.altCarLabel}", diff=${r.diffNet}`]);
 }
-const { findCarByIdOrName } = await import('../src/engine/scenario.ts');
+const { findCarByIdOrName } = await import('../server/bl/engine/scenario.ts');
 {
   const c = findCarByIdOrName('COROLLA CROSS');
   probes.push(["findCarByIdOrName('COROLLA CROSS') returns COROLLA CROSS", c?.model === 'COROLLA CROSS', `got ${c?.id} ${c?.model}`]);
 }
-const { executeTool } = await import('../src/agent/tools.ts');
+const { executeTool } = await import('../server/bl/agent/tools.ts');
 const ctx: any = {
   profile: (employees as EmployeeProfile[])[0], lastComparison: null, repParticipationMode: false,
   onProfileUpdate: () => {}, onComparisonRun: () => {}, onEscalate: async () => 'T-1',
@@ -175,7 +175,7 @@ for (const q of ['קורולה קרוס', 'אטו', 'טסלה', 'קרניבל'])
   const { result } = await executeTool('run_comparison', { scenarioType: 'go_electric', targetCarId: 'CAR-10' }, c2);
   probes.push(['run_comparison after update_profile(base=30000) in the same turn uses the new base', result.todayNet !== 11032, `todayNet=${result.todayNet}`]);
 }
-const { verifyNumbersInResponse } = await import('../src/agent/guard.ts');
+const { verifyNumbersInResponse } = await import('../server/bl/agent/guard.ts');
 {
   const g1 = verifyNumbersInResponse('הנטו שלך יעלה ב-661 ₪ ויהיה 11,693 ₪', ['11693 661']);
   probes.push(['Guard accepts "11,693" when the tool returned 11693', g1.passed, `invented=${g1.inventedNumbers.join(',')}`]);

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import employees from '../src/data/employees.json';
-import { executeTool } from '../src/agent/tools.ts';
-import type { AgentContext } from '../src/agent/types.ts';
-import { buildScenario, findOccupation } from '../src/engine/scenario.ts';
-import type { EmployeeProfile } from '../src/engine/types.ts';
+import employees from '../server/data/employees.json';
+import { executeTool } from '../server/bl/agent/tools.ts';
+import type { AgentContext } from '../server/bl/agent/types.ts';
+import { buildScenario, findOccupation } from '../server/bl/engine/scenario.ts';
+import type { EmployeeProfile } from '../server/bl/engine/types.ts';
 
 const noa = (employees as EmployeeProfile[])[0];
 
