@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateNationalInsuranceAndHealth } from '../src/engine/tax.ts';
+import { calculateNationalInsuranceAndHealth } from '../server/bl/engine/tax.ts';
 
 // SPEC 3.1: niHealth = 0.0427 × min(base, 7,522) + 0.1217 × (min(base, 50,695) − 7,522)
 // (NI 1.04% + health 3.23% below the threshold, NI 7% + health 5.17% above it)

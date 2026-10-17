@@ -1,6 +1,9 @@
 node_modules/
 build/
 dist/
+dist-server/
+# Local server storage (sessions, tickets, tax records): may hold salary data
+.data/
 coverage/
 .DS_Store
 *.log

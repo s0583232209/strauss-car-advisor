@@ -1,5 +1,5 @@
 /**
- * Check for the agent tools in src/agent/tools.ts, without a model.
+ * Check for the agent tools in server/bl/agent/tools.ts, without a model.
  * Run: npx tsx tests/tools.check.ts
  *
  * Each tool is called through executeTool() with a fake AgentContext.
@@ -7,11 +7,11 @@
  * Expected nets for Noa (E-001, ATTO 3) are copied from SPEC 8.1.
  * Exit code 1 if any check fails.
  */
-import { executeTool } from '../src/agent/tools.ts';
-import type { AgentContext } from '../src/agent/types.ts';
-import type { Car, ComparisonResult, EmployeeProfile } from '../src/engine/types.ts';
-import catalogData from '../src/data/catalog.json';
-import employees from '../src/data/employees.json';
+import { executeTool } from '../server/bl/agent/tools.ts';
+import type { AgentContext } from '../server/bl/agent/types.ts';
+import type { Car, ComparisonResult, EmployeeProfile } from '../server/bl/engine/types.ts';
+import catalogData from '../server/data/catalog.json';
+import employees from '../server/data/employees.json';
 
 const catalog = catalogData as Car[];
 

@@ -4,8 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { getStorageAdapter } from './store/supabaseAdapter.ts';
-import { StorageAdapter, SupportTicket } from './store/types.ts';
+import { api } from './api/client.ts';
 import { AdminView } from './ui/AdminView.tsx';
 import { EmployeeView } from './ui/EmployeeView.tsx';
 import { GuideView } from './ui/GuideView.tsx';
@@ -17,10 +16,6 @@ export default function App() {
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>('employee');
   const [openTicketsCount, setOpenTicketsCount] = useState<number>(0);
   const [isThrottled, setIsThrottled] = useState(false);
-
-  // Storage adapter singleton
-  const storage: StorageAdapter = getStorageAdapter();
-  const sessionId = 'session-strauss-primary';
 
   // Handle Hash routing
   useEffect(() => {
@@ -51,14 +46,21 @@ export default function App() {
     else if (screen === 'guide') window.location.hash = '#/guide';
   };
 
-  // Subscribe to tickets to keep the open-tickets badge updated
+  // Poll the open-tickets count for the header badge (a number only, no ticket content)
   useEffect(() => {
-    const unsub = storage.onTicketsChange((tickets: SupportTicket[]) => {
-      const open = tickets.filter((t) => t.status === 'open').length;
-      setOpenTicketsCount(open);
-    });
-    return () => unsub();
-  }, [storage]);
+    let active = true;
+    const refresh = () =>
+      api.tickets
+        .openCount()
+        .then((n) => active && setOpenTicketsCount(n))
+        .catch(() => undefined);
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-surface text-ink flex flex-col font-sans">
@@ -73,16 +75,10 @@ export default function App() {
       {/* Main Screen Content */}
       <main className="flex-1">
         {activeScreen === 'employee' && (
-          <EmployeeView
-            storage={storage}
-            sessionId={sessionId}
-            onTicketCreated={() => {
-              // Ticket badge updates via listener
-            }}
-          />
+          <EmployeeView onThrottledChange={setIsThrottled} />
         )}
 
-        {activeScreen === 'rep' && <RepresentativeView storage={storage} />}
+        {activeScreen === 'rep' && <RepresentativeView />}
 
         {activeScreen === 'admin' && <AdminView />}
 

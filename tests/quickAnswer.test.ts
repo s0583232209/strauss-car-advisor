@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseQuickAnswer } from '../src/agent/quickAnswer.ts';
+import { parseQuickAnswer } from '../server/bl/agent/quickAnswer.ts';
 
 describe('parseQuickAnswer: simple answers are read in code', () => {
   it('named values in several parts', () => {

@@ -1,5 +1,5 @@
 /**
- * Check for src/store/repAnswer.ts (TODO C.4): applying a rep answer in the employee chat.
+ * Check for server/bl/services/repAnswer.ts (TODO C.4): applying a rep answer in the employee chat.
  * Run: npx tsx tests/repAnswer.check.ts
  *
  * Scenario: Noa (E-001) asks about ATTO 3 (CAR-10, go_electric). While the rep
@@ -8,11 +8,11 @@
  * Today's net must stay 11,032 (SPEC 8.1): the 350 is the NEW car's participation.
  * Exit code 1 if any check fails.
  */
-import { buildScenario } from '../src/engine/scenario.ts';
-import type { ComparisonResult, EmployeeProfile } from '../src/engine/types.ts';
-import { applyRepAnswer, findUndeliveredAnswers } from '../src/store/repAnswer.ts';
-import type { SupportTicket } from '../src/store/types.ts';
-import employees from '../src/data/employees.json';
+import { buildScenario } from '../server/bl/engine/scenario.ts';
+import type { ComparisonResult, EmployeeProfile } from '../server/bl/engine/types.ts';
+import { applyRepAnswer, findUndeliveredAnswers } from '../server/bl/services/repAnswer.ts';
+import type { SupportTicket } from '../shared/types.ts';
+import employees from '../server/data/employees.json';
 
 let passed = 0;
 let failed = 0;

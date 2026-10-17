@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { carOnLine, numberedLine, searchCars } from '../src/agent/carSearch.ts';
-import { AGENT_TOOLS_DEFINITIONS, executeTool, toolStatus } from '../src/agent/tools.ts';
-import type { AgentContext } from '../src/agent/types.ts';
-import type { EmployeeProfile } from '../src/engine/types.ts';
+import { carOnLine, numberedLine, searchCars } from '../server/bl/agent/carSearch.ts';
+import { AGENT_TOOLS_DEFINITIONS, executeTool, toolStatus } from '../server/bl/agent/tools.ts';
+import type { AgentContext } from '../server/bl/agent/types.ts';
+import type { EmployeeProfile } from '../server/bl/engine/types.ts';
 
 function ctx(profile: Partial<EmployeeProfile>, userTexts: string[] = []): AgentContext {
   return {

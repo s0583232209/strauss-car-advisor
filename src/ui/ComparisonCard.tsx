@@ -18,7 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { ComparisonResult } from '../engine/types.ts';
+import { ComparisonResult } from '../../shared/types.ts';
 import { WaterfallChart } from './WaterfallChart.tsx';
 
 interface ComparisonCardProps {

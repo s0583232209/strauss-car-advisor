@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { DeltaStep } from '../engine/types.ts';
+import { DeltaStep } from '../../shared/types.ts';
 
 interface WaterfallChartProps {
   todayNet: number;

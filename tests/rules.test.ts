@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import catalogData from '../src/data/catalog.json';
-import employees from '../src/data/employees.json';
-import { buildScenario } from '../src/engine/scenario.ts';
-import type { Car, EmployeeProfile, ScenarioType } from '../src/engine/types.ts';
+import catalogData from '../server/data/catalog.json';
+import employees from '../server/data/employees.json';
+import { buildScenario } from '../server/bl/engine/scenario.ts';
+import type { Car, EmployeeProfile, ScenarioType } from '../server/bl/engine/types.ts';
 
 // Rule assertions (SPEC 8.2, 8.3). Money is compared with toBeCloseTo(x, 2).
 const catalog = catalogData as Car[];

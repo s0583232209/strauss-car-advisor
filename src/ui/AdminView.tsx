@@ -23,33 +23,31 @@ import {
   XCircle,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import catalogData from '../data/catalog.json';
-import employeesData from '../data/employees.json';
-import occupationsData from '../data/occupations.json';
-import { lookupBenefitValue, makeLookupKey } from '../engine/benefit.ts';
-import { getRules, resetRules, setRules } from '../engine/rules.ts';
-import { Car, EmployeeProfile, Occupation, Rules, VehicleLookupResult } from '../engine/types.ts';
-import { parseTaxAuthorityCsv } from '../store/csvParser.ts';
-import { clearTaxDb, getIndexedDbRecordCount, lookupIndexedDbTaxRecord } from '../store/db.ts';
-import { CalibrationSummary, runCalibrationSuite } from '../tests/calibration.test.ts';
+import type { AdminOverview, CalibrationSummary, Rules, VehicleLookupResult } from '../../shared/types.ts';
+import { accessToken, api, ApiError } from '../api/client.ts';
+import { AccessGate } from './AccessGate.tsx';
 
 export const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     'calibration' | 'rules' | 'catalog' | 'occupations' | 'employees' | 'tax' | 'db' | 'assumptions'
   >('calibration');
 
+  // Reference data, rules and record count from the server
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [locked, setLocked] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   // Calibration test runner state
   const [calibrationData, setCalibrationData] = useState<CalibrationSummary | null>(null);
   const [isRunningTests, setIsRunningTests] = useState(false);
 
   // Rules state
-  const [currentRules, setCurrentRules] = useState<Rules>(getRules());
-  const [rulesJsonString, setRulesJsonString] = useState<string>(
-    JSON.stringify(getRules(), null, 2)
-  );
+  const [currentRules, setCurrentRules] = useState<Rules | null>(null);
+  const [rulesJsonString, setRulesJsonString] = useState<string>('');
   const [rulesSavedMsg, setRulesSavedMsg] = useState<string | null>(null);
 
-  // IndexedDB tax database status
+  // Tax Authority file (stored on the server)
   const [taxRowCount, setTaxRowCount] = useState<number>(0);
   const [csvUploadStatus, setCsvUploadStatus] = useState<string | null>(null);
   const [csvProgress, setCsvProgress] = useState<number>(0);
@@ -62,83 +60,144 @@ export const AdminView: React.FC = () => {
   const [lookupResult, setLookupResult] = useState<VehicleLookupResult | null>(null);
   const [lookupSearched, setLookupSearched] = useState(false);
 
-  // Run tests on mount
+  /** A 401 shows the access-code screen; anything else is shown above the tabs */
+  const handleApiError = (err: unknown) => {
+    if (err instanceof ApiError && err.status === 401) {
+      setLockError(accessToken.get('admin') ? 'קוד הגישה שגוי' : null);
+      accessToken.set('admin', null);
+      setLocked(true);
+      return;
+    }
+    setLoadError(err instanceof Error ? err.message : 'שגיאה בתקשורת עם השרת');
+  };
+
+  const showRules = (r: Rules) => {
+    setCurrentRules(r);
+    setRulesJsonString(JSON.stringify(r, null, 2));
+  };
+
+  const loadOverview = async () => {
+    try {
+      const o = await api.admin.overview();
+      setOverview(o);
+      showRules(o.rules);
+      setTaxRowCount(o.taxRecordCount);
+      setLoadError(null);
+      runTests();
+    } catch (err) {
+      handleApiError(err);
+    }
+  };
+
+  // Load data and run tests on mount (and after unlocking)
   useEffect(() => {
-    runTests();
-    refreshDbCount();
-  }, []);
+    if (!locked) loadOverview();
+  }, [locked]);
 
   const runTests = async () => {
     setIsRunningTests(true);
     try {
-      const res = await runCalibrationSuite();
-      setCalibrationData(res);
+      setCalibrationData(await api.admin.runCalibration());
+    } catch (err) {
+      handleApiError(err);
     } finally {
       setIsRunningTests(false);
     }
   };
 
   const refreshDbCount = async () => {
-    const count = await getIndexedDbRecordCount();
-    setTaxRowCount(count);
-  };
-
-  const handleSaveRules = () => {
     try {
-      const parsed = JSON.parse(rulesJsonString);
-      setRules(parsed);
-      setCurrentRules(parsed);
-      setRulesSavedMsg('הכללים נשמרו ועודכנו במנוע בהצלחה!');
-      setTimeout(() => setRulesSavedMsg(null), 3000);
-      runTests();
-    } catch (err: any) {
-      alert(`שגיאה בתחביר ה-JSON: ${err?.message}`);
+      setTaxRowCount((await api.admin.overview()).taxRecordCount);
+    } catch (err) {
+      handleApiError(err);
     }
   };
 
-  const handleResetRules = () => {
-    resetRules();
-    const r = getRules();
-    setCurrentRules(r);
-    setRulesJsonString(JSON.stringify(r, null, 2));
-    setRulesSavedMsg('הכללים אופסו לברירת המחדל.');
+  const flashRulesMsg = (msg: string) => {
+    setRulesSavedMsg(msg);
     setTimeout(() => setRulesSavedMsg(null), 3000);
-    runTests();
+  };
+
+  const handleSaveRules = async () => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rulesJsonString);
+    } catch (err: any) {
+      alert(`שגיאה בתחביר ה-JSON: ${err?.message}`);
+      return;
+    }
+    try {
+      showRules(await api.admin.saveRules(parsed));
+      flashRulesMsg('הכללים נשמרו ועודכנו במנוע בהצלחה!');
+      runTests();
+    } catch (err: any) {
+      if (err instanceof ApiError && err.status === 400) alert(err.message);
+      else handleApiError(err);
+    }
+  };
+
+  const handleResetRules = async () => {
+    try {
+      showRules(await api.admin.resetRules());
+      flashRulesMsg('הכללים אופסו לברירת המחדל.');
+      runTests();
+    } catch (err) {
+      handleApiError(err);
+    }
   };
 
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
-    setCsvUploadStatus('קורא ומנתח קובץ CSV רשות המסים (windows-1255)...');
-    setCsvProgress(10);
+    setCsvUploadStatus('מעלה את הקובץ לשרת ומנתח אותו (windows-1255)...');
+    setCsvProgress(30);
 
     try {
-      const buffer = await file.arrayBuffer();
-      const count = await parseTaxAuthorityCsv(buffer, (p) => {
-        setCsvProgress(p.percentage);
-        setCsvUploadStatus(`מעבד שורות: ${p.processedRows.toLocaleString()} / ${p.totalRows.toLocaleString()} (${p.percentage}%)`);
-      });
-
-      setCsvUploadStatus(`הקובץ נטען בהצלחה! ${count.toLocaleString()} רשומות נשמרו ב-IndexedDB.`);
+      const { count } = await api.admin.uploadTaxCsv(file);
+      setCsvProgress(100);
+      setCsvUploadStatus(`הקובץ נטען בהצלחה! ${count.toLocaleString()} רשומות נשמרו בשרת.`);
       refreshDbCount();
       runTests();
     } catch (err: any) {
-      setCsvUploadStatus(`שגיאה בטעינת ה-CSV: ${err?.message}`);
+      setCsvProgress(0);
+      if (err instanceof ApiError && err.status === 401) handleApiError(err);
+      else setCsvUploadStatus(`שגיאה בטעינת ה-CSV: ${err?.message}`);
+    } finally {
+      e.target.value = '';
     }
   };
 
   const handleRunLookup = async () => {
     setLookupSearched(true);
-    const key = makeLookupKey(lookupYear, lookupType, lookupProduct, lookupModel);
-    // Try custom db first, then benefit lookup
-    const idb = await lookupIndexedDbTaxRecord(key);
-    if (idb) {
-      setLookupResult(idb);
-      return;
+    try {
+      // Uploaded file first, then the seed and the catalog (server side)
+      setLookupResult(await api.admin.lookup({ year: lookupYear, type: lookupType, product: lookupProduct, model: lookupModel }));
+    } catch (err) {
+      setLookupResult(null);
+      handleApiError(err);
     }
-    const seed = await lookupBenefitValue(lookupYear, lookupProduct, lookupModel, lookupType);
-    setLookupResult(seed);
   };
+
+  if (locked) {
+    return (
+      <AccessGate
+        role="admin"
+        error={lockError}
+        onUnlocked={() => {
+          setLockError(null);
+          setLocked(false);
+        }}
+      />
+    );
+  }
+
+  if (!overview || !currentRules) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 text-center text-sm text-slate-500">
+        {loadError ?? 'טוען נתוני ניהול...'}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -414,7 +473,7 @@ export const AdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {(catalogData as Car[]).map((car) => (
+                {overview.catalog.map((car) => (
                   <tr key={car.id} className="hover:bg-slate-50">
                     <td className="p-3 font-bold text-brand-dark">{car.id}</td>
                     <td className="p-3">
@@ -476,7 +535,7 @@ export const AdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(occupationsData as Occupation[]).map((occ, idx) => (
+                {overview.occupations.map((occ, idx) => (
                   <tr key={idx} className="hover:bg-slate-50">
                     <td className="p-3 font-bold text-slate-900">{occ.occupation}</td>
                     <td className="p-3 font-bold text-brand-dark">קבוצה {occ.group}</td>
@@ -536,7 +595,7 @@ export const AdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {(employeesData as any[]).map((emp) => (
+                {overview.employees.map((emp) => (
                   <tr key={emp.id} className="hover:bg-slate-50">
                     <td className="p-3 font-bold text-brand-dark">{emp.id}</td>
                     <td className="p-3 font-bold text-slate-900">{emp.name}</td>
@@ -622,7 +681,7 @@ export const AdminView: React.FC = () => {
           <div>
             <h3 className="text-base font-bold text-ink">מאגר שווי שימוש ברכב (רשות המסים - הקובץ המורחב)</h3>
             <p className="text-xs text-slate-500">
-              טעינת קובץ CSV רשמי של רשות המסים (כ-78,000 שורות בקידוד windows-1255) הנשמר ב-IndexedDB כאינדקס קומפקטי
+              טעינת קובץ CSV רשמי של רשות המסים (כ-78,000 שורות בקידוד windows-1255) הנשמר בשרת כאינדקס קומפקטי
             </p>
           </div>
 
@@ -678,11 +737,11 @@ export const AdminView: React.FC = () => {
             {/* DB Status */}
             <div className="p-4 rounded-xl border border-slate-200 space-y-3 flex flex-col justify-between">
               <div>
-                <span className="font-bold text-slate-800 block mb-1">מצב IndexedDB נוכחי:</span>
+                <span className="font-bold text-slate-800 block mb-1">מצב המאגר בשרת:</span>
                 <div className="text-2xl font-black text-brand-dark">{taxRowCount.toLocaleString()} רשומות</div>
                 <div className="text-slate-500 mt-1">
                   {taxRowCount > 0
-                    ? 'מאגר IndexedDB פעיל ומוכן לשליפות מהירות במכשיר.'
+                    ? 'המאגר בשרת פעיל ומוכן לשליפות.'
                     : 'כרגע פעיל מאגר הזרע המאומת של הקטלוג (כל 20 הרכבים זמינים).'}
                 </div>
               </div>
@@ -690,12 +749,16 @@ export const AdminView: React.FC = () => {
               {taxRowCount > 0 && (
                 <button
                   onClick={async () => {
-                    await clearTaxDb();
+                    try {
+                      await api.admin.clearTaxRecords();
+                    } catch (err) {
+                      handleApiError(err);
+                    }
                     refreshDbCount();
                   }}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold text-danger bg-danger/10 hover:bg-danger/20 w-fit"
                 >
-                  נקה מאגר IndexedDB
+                  נקה את המאגר בשרת
                 </button>
               )}
             </div>

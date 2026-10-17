@@ -1,10 +1,10 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import catalogData from '../src/data/catalog.json';
-import employees from '../src/data/employees.json';
-import { roundStepsToTotal } from '../src/engine/explain.ts';
-import { buildScenario } from '../src/engine/scenario.ts';
-import type { Car, DeltaStep, EmployeeProfile, ScenarioType } from '../src/engine/types.ts';
+import catalogData from '../server/data/catalog.json';
+import employees from '../server/data/employees.json';
+import { roundStepsToTotal } from '../server/bl/engine/explain.ts';
+import { buildScenario } from '../server/bl/engine/scenario.ts';
+import type { Car, DeltaStep, EmployeeProfile, ScenarioType } from '../server/bl/engine/types.ts';
 
 const catalog = catalogData as Car[];
 const sumRounded = (steps: DeltaStep[]) => steps.reduce((acc, s) => acc + (s.deltaNetRounded as number), 0);

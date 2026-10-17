@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { extractNumbers, parseCount, parseMoney, parsePercent } from '../src/agent/normalize.ts';
-import { executeTool } from '../src/agent/tools.ts';
-import type { AgentContext } from '../src/agent/types.ts';
-import type { EmployeeProfile } from '../src/engine/types.ts';
+import { extractNumbers, parseCount, parseMoney, parsePercent } from '../server/bl/agent/normalize.ts';
+import { executeTool } from '../server/bl/agent/tools.ts';
+import type { AgentContext } from '../server/bl/agent/types.ts';
+import type { EmployeeProfile } from '../server/bl/engine/types.ts';
 
 const ok = (value: number) => ({ ok: true, value });
 // Money is compared to 2 decimals, never with exact equality

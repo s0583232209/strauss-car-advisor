@@ -4,46 +4,33 @@
  */
 
 import {
-  AlertCircle,
-  Car as CarIcon,
-  CheckCircle2,
-  ChevronDown,
   Edit3,
   Paperclip,
-  PlusCircle,
   RotateCcw,
   Send,
-  Sparkles,
   ToggleLeft,
   ToggleRight,
   User,
   Users,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import { runAgentTurn } from '../agent/loop.ts';
-import { buildOpeningMessage } from '../agent/profileStatus.ts';
-import { getMissingFields } from '../agent/tools.ts';
-import employeesData from '../data/employees.json';
-import { buildScenario, findCarByIdOrName, findOccupation } from '../engine/scenario.ts';
-import { ComparisonResult, EligibilityGroup, EmployeeProfile } from '../engine/types.ts';
-import { applyRepAnswer, findUndeliveredAnswers } from '../store/repAnswer.ts';
-import { ChatMessage, StorageAdapter, SupportTicket } from '../store/types.ts';
+import type { ChatMessage, ComparisonResult, EmployeeProfile, SampleEmployee, SessionState } from '../../shared/types.ts';
+import { api } from '../api/client.ts';
 import { AdvisorLogo, Pinwheel } from './CarDecor.tsx';
 import { ComparisonCard } from './ComparisonCard.tsx';
 import { PayslipModal } from './PayslipModal.tsx';
 
-// Start of the system message shown when a sample employee is loaded (dry runs only)
-const SAMPLE_LOADED_PREFIX = 'נטענו בהצלחה נתוני הדוגמה של';
-
-// Empty profile: every field is undefined until the agent collects it (get_missing_fields);
-// 0 is a valid answer. EmployeeProfile keeps the fields required because the engine needs
-// them, so every buildScenario call is guarded by getMissingFields.
+// Empty profile until the server sends the conversation
 const emptyProfile = () => ({}) as EmployeeProfile;
 
+// How often the chat asks the server for rep answers that arrived meanwhile
+const SYNC_INTERVAL_MS = 4000;
+// Card edits are sent after the employee stops typing for this long
+const PROFILE_SAVE_DELAY_MS = 400;
+
 interface EmployeeViewProps {
-  storage: StorageAdapter;
-  sessionId: string;
-  onTicketCreated: () => void;
+  /** The model provider is throttling (shown in the header) */
+  onThrottledChange?: (throttled: boolean) => void;
 }
 
 // Sample-question chips take turns through the Strauss pinwheel colors
@@ -54,30 +41,25 @@ const CHIP_COLORS = [
   'bg-orange-light border-orange/30 hover:bg-orange/20',
 ];
 
-export const EmployeeView: React.FC<EmployeeViewProps> = ({
-  storage,
-  sessionId,
-  onTicketCreated,
-}) => {
-  // State: Profile
+const systemNote = (content: string): ChatMessage => ({
+  id: `local-${Date.now()}`,
+  role: 'system',
+  content,
+  timestamp: Date.now(),
+});
+
+export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange }) => {
+  // State: the conversation as the server keeps it
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [profile, setProfile] = useState<EmployeeProfile>(emptyProfile);
-
-  // Recompute a comparison only when the profile is complete for its scenario
-  const recomputeIfComplete = (p: EmployeeProfile, prev: ComparisonResult): ComparisonResult | null =>
-    getMissingFields(p, prev.scenarioType).length > 0
-      ? null
-      : buildScenario(p, { type: prev.scenarioType, targetCarId: prev.targetCar?.id });
-
-  // State: Messages & Conversation
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [lastComparison, setLastComparison] = useState<ComparisonResult | null>(null);
+  const [sampleEmployees, setSampleEmployees] = useState<SampleEmployee[]>([]);
+
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   // What the agent is doing right now (shown in the typing indicator)
   const [agentStatus, setAgentStatus] = useState('');
-  const [isThrottled, setIsThrottled] = useState(false);
-
-  // State: Last Comparison
-  const [lastComparison, setLastComparison] = useState<ComparisonResult | null>(null);
 
   // State: Toggle for rep participation demo mode
   const [repParticipationMode, setRepParticipationMode] = useState(false);
@@ -87,266 +69,122 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Latest values for timers and async callbacks that would otherwise see stale closures
+  const busyRef = useRef(false);
+  const repModeRef = useRef(repParticipationMode);
+  const lastMessageIdRef = useRef<string | undefined>(undefined);
+  const profileSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  repModeRef.current = repParticipationMode;
 
-  // Latest values for async callbacks (agent turn, chips) that would otherwise see stale closures
-  const profileRef = useRef(profile);
-  const lastComparisonRef = useRef(lastComparison);
-  const messagesRef = useRef(messages);
-  // Fields the bot asked and the employee has not answered yet (the bot asks these again first)
-  const pendingFieldsRef = useRef<string[] | undefined>(undefined);
-  profileRef.current = profile;
-  lastComparisonRef.current = lastComparison;
-  messagesRef.current = messages;
+  /** Shows the server's view of the conversation */
+  const applyState = (s: SessionState) => {
+    setSessionId(s.id);
+    setProfile(s.profile);
+    setMessages(s.messages);
+    setLastComparison(s.lastComparison);
+    lastMessageIdRef.current = s.messages[s.messages.length - 1]?.id;
+  };
 
-  // Load state from StorageAdapter on mount
-  useEffect(() => {
-    async function loadInitial() {
-      const savedProfile = await storage.loadProfile(sessionId);
-      const savedMessages = (await storage.loadMessages(sessionId)) || [];
+  const showError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : 'אנא נסו שנית';
+    setMessages((prev) => [...prev, systemNote(`שגיאה: ${message}`)]);
+  };
 
-      // The profile belongs to its conversation. Keep it only if there is a conversation, and keep
-      // a sample profile only if it was loaded on purpose (older versions saved Noa as the default).
-      const hasConversation = savedMessages.length > 1;
-      const sampleLoaded = savedMessages.some((m) => m.role === 'system' && m.content.startsWith(SAMPLE_LOADED_PREFIX));
-      const keepSaved = !!savedProfile && hasConversation && (!savedProfile.id || sampleLoaded);
-
-      if (keepSaved) {
-        setProfile(savedProfile);
-        setMessages(savedMessages);
-        const savedComp = await storage.loadLastComparison(sessionId);
-        if (savedComp) setLastComparison(savedComp);
-      } else {
-        // Start clean: no profile, no comparison, only the greeting
-        await storage.saveProfile(sessionId, emptyProfile());
-        await storage.saveLastComparison(sessionId, null);
-        // Initial greeting
-        const greeting: ChatMessage = {
-          id: 'msg-0',
-          role: 'assistant',
-          content: buildOpeningMessage(emptyProfile()),
-          timestamp: Date.now(),
-        };
-        setMessages([greeting]);
-        await storage.saveMessages(sessionId, [greeting]);
-      }
+  /** Runs one server call at a time (a message, a sample load, a reset) */
+  const runExclusive = async (fn: () => Promise<void>): Promise<void> => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await fn();
+    } catch (err) {
+      showError(err);
+    } finally {
+      busyRef.current = false;
     }
+  };
 
-    loadInitial();
-  }, [sessionId, storage]);
-
-  // Ticket ids being delivered right now (polling fires every 2s, delivery is async)
-  const deliveringRef = useRef<Set<string>>(new Set());
-  // Latest handleSendMessage for the ticket subscription below
-  const sendMessageRef = useRef<typeof handleSendMessage | null>(null);
-
-  // Subscribe to storage changes (e.g. when rep answers ticket in another tab)
+  // Load this browser's conversation and the sample employees on mount
   useEffect(() => {
-    const unsubscribe = storage.onTicketsChange(async (tickets) => {
-      for (const ticket of findUndeliveredAnswers(tickets, sessionId)) {
-        if (deliveringRef.current.has(ticket.id)) continue;
-        deliveringRef.current.add(ticket.id);
+    api.sessions.current().then(applyState).catch(showError);
+    api.meta().then((m) => setSampleEmployees(m.sampleEmployees)).catch(() => undefined);
+  }, []);
 
-        const delivery = applyRepAnswer(
-          ticket,
-          profileRef.current,
-          lastComparisonRef.current,
-          Date.now()
-        );
-        // Mark as delivered first, so a reload or another poll never shows it twice
-        await storage.saveTicket(delivery.ticket);
-
-        const repMsg: ChatMessage = {
-          id: `rep-ans-${ticket.id}`,
-          role: 'rep',
-          content: delivery.repMessageText,
-          comparison: delivery.comparison,
-          timestamp: Date.now(),
-        };
-        const newMessages = [...messagesRef.current, repMsg];
-        messagesRef.current = newMessages;
-        setMessages(newMessages);
-        await storage.addMessage(sessionId, repMsg);
-
-        if (delivery.comparison) {
-          lastComparisonRef.current = delivery.comparison;
-          setLastComparison(delivery.comparison);
-          await storage.saveLastComparison(sessionId, delivery.comparison);
-        }
-
-        if (delivery.agentNote) {
-          await sendMessageRef.current?.(delivery.agentNote, {
-            messages: newMessages,
-            internal: true,
-          });
-        }
+  // Rep answers arrive through the server: poll while idle and show new messages
+  useEffect(() => {
+    if (!sessionId) return;
+    const timer = setInterval(async () => {
+      if (busyRef.current) return;
+      try {
+        const s = await api.sessions.sync(sessionId, repModeRef.current);
+        if (busyRef.current) return;
+        if (s.messages[s.messages.length - 1]?.id !== lastMessageIdRef.current) applyState(s);
+      } catch {
+        // Next poll tries again
       }
-    });
-
-    return () => unsubscribe();
-  }, [sessionId, storage]);
+    }, SYNC_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [sessionId]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Handle user send message
-  const handleSendMessage = async (
-    textToSend?: string,
-    override?: { profile?: EmployeeProfile; messages?: ChatMessage[]; internal?: boolean }
-  ) => {
-    const text = (textToSend || inputValue).trim();
-    if (!text || isTyping) return;
-
-    // Internal system notes (e.g. a rep answer) go to the agent only, not to the chat
-    let newMessages = override?.messages ?? messagesRef.current;
-    if (!override?.internal) {
-      setInputValue('');
-      const userMsg: ChatMessage = {
-        id: `usr-${Date.now()}`,
-        role: 'user',
-        content: text,
-        timestamp: Date.now(),
-      };
-
-      newMessages = [...newMessages, userMsg];
-      messagesRef.current = newMessages;
-      setMessages(newMessages);
-      await storage.addMessage(sessionId, userMsg);
-    }
-
+  /** One agent turn on the server; the status line follows what the agent is doing */
+  const sendToAgent = async (text: string, id: string) => {
+    // Shown right away; replaced by the server's conversation when the turn ends
+    setMessages((prev) => [...prev, { id: `local-usr-${Date.now()}`, role: 'user', content: text, timestamp: Date.now() }]);
     setAgentStatus('');
     setIsTyping(true);
-
-    // Comparison computed during this turn (attached to the assistant message)
-    let turnComparison: ComparisonResult | undefined;
-
     try {
-      const turnResult = await runAgentTurn(
-        text,
-        newMessages,
-        {
-          // Copy: tools mutate the turn profile in place (tools.ts update_profile)
-          profile: { ...(override?.profile ?? profileRef.current) },
-          lastComparison: lastComparisonRef.current,
-          repParticipationMode,
-          pendingFields: pendingFieldsRef.current,
-          onProfileUpdate: async (updates) => {
-            const updated = { ...profileRef.current, ...updates };
-            profileRef.current = updated;
-            setProfile(updated);
-            storage.saveProfile(sessionId, updated);
-            // If last comparison exists, recompute with updated profile
-            const prevComparison = lastComparisonRef.current;
-            const recomputed = prevComparison ? recomputeIfComplete(updated, prevComparison) : null;
-            if (recomputed) {
-              lastComparisonRef.current = recomputed;
-              setLastComparison(recomputed);
-              storage.saveLastComparison(sessionId, recomputed);
-            }
-          },
-          onComparisonRun: async (comp) => {
-            turnComparison = comp;
-            lastComparisonRef.current = comp;
-            setLastComparison(comp);
-            await storage.saveLastComparison(sessionId, comp);
-          },
-          onEscalate: async (question, summary) => {
-            const ticketId = `TICK-${Date.now().toString().slice(-4)}`;
-            const ticket: SupportTicket = {
-              id: ticketId,
-              sessionId,
-              question,
-              summary,
-              status: 'open',
-              profile: profileRef.current,
-              lastComparison: lastComparisonRef.current || undefined,
-              transcript: newMessages,
-              createdAt: Date.now(),
-            };
-            await storage.saveTicket(ticket);
-            onTicketCreated();
-            return ticketId;
-          },
-        },
-        (throttled) => setIsThrottled(throttled),
-        setAgentStatus
-      );
-      pendingFieldsRef.current = turnResult.pendingFields;
-
-      const assistantMsg: ChatMessage = {
-        id: `ast-${Date.now()}`,
-        role: 'assistant',
-        content: turnResult.text,
-        comparison: turnComparison,
-        timestamp: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-      await storage.addMessage(sessionId, assistantMsg);
-    } catch (err: any) {
-      const errorMsg: ChatMessage = {
-        id: `err-${Date.now()}`,
-        role: 'system',
-        content: `שגיאה בעיבוד הבקשה: ${err?.message || 'אנא נסו שנית'}.`,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
+      const s = await api.sessions.sendMessage(id, text, repModeRef.current, (event) => {
+        if (event.type === 'status') setAgentStatus(event.text);
+        else if (event.type === 'throttled') onThrottledChange?.(event.on);
+      });
+      applyState(s);
     } finally {
       setIsTyping(false);
+      onThrottledChange?.(false);
     }
   };
 
-  sendMessageRef.current = handleSendMessage;
-
-  // Helper to load sample employee
-  const handleLoadSampleEmployee = async (
-    empId: string
-  ): Promise<{ profile: EmployeeProfile; messages: ChatMessage[] } | undefined> => {
-    const target = (employeesData as EmployeeProfile[]).find((e) => e.id === empId);
-    if (!target) return undefined;
-
-    profileRef.current = target;
-    setProfile(target);
-    await storage.saveProfile(sessionId, target);
-
-    // Initial baseline comparison
-    const initialComp = buildScenario(target, { type: 'keep' as any });
-    lastComparisonRef.current = initialComp;
-    setLastComparison(initialComp);
-    await storage.saveLastComparison(sessionId, initialComp);
-
-    const loadMsg: ChatMessage = {
-      id: `sys-${Date.now()}`,
-      role: 'system',
-      content: `${SAMPLE_LOADED_PREFIX} ${target.name} (${target.occupation}, קבוצה ${target.group}, שכר בסיס ${target.base?.toLocaleString()} ₪).`,
-      timestamp: Date.now(),
-    };
-    const updatedMessages = [...messagesRef.current, loadMsg];
-    messagesRef.current = updatedMessages;
-    setMessages(updatedMessages);
-    await storage.addMessage(sessionId, loadMsg);
-    return { profile: target, messages: updatedMessages };
+  // Handle user send message
+  const handleSendMessage = async (textToSend?: string) => {
+    const text = (textToSend || inputValue).trim();
+    if (!text || isTyping || !sessionId) return;
+    if (!textToSend) setInputValue('');
+    await runExclusive(() => sendToAgent(text, sessionId));
   };
 
+  // Helper to load sample employee
+  const handleLoadSampleEmployee = (empId: string) =>
+    runExclusive(async () => {
+      if (!sessionId) return;
+      applyState(await api.sessions.loadSample(sessionId, empId));
+    });
+
   // Reset conversation: a new conversation starts with an empty profile (no data carried over)
-  const handleNewConversation = async () => {
-    const greeting: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'assistant',
-      content: buildOpeningMessage(emptyProfile()),
-      timestamp: Date.now(),
-    };
-    const cleared = emptyProfile();
-    profileRef.current = cleared;
-    lastComparisonRef.current = null;
-    messagesRef.current = [greeting];
-    setProfile(cleared);
-    setMessages([greeting]);
-    setLastComparison(null);
-    await storage.saveProfile(sessionId, cleared);
-    await storage.saveMessages(sessionId, [greeting]);
-    await storage.saveLastComparison(sessionId, null);
+  const handleNewConversation = () =>
+    runExclusive(async () => {
+      if (!sessionId) return;
+      applyState(await api.sessions.reset(sessionId));
+    });
+
+  /** Card edit: shown at once, saved (and the comparison recomputed) when typing pauses */
+  const handleProfileEdit = (updates: Partial<EmployeeProfile>) => {
+    setProfile((prev) => ({ ...prev, ...updates }));
+    if (profileSaveTimer.current) clearTimeout(profileSaveTimer.current);
+    profileSaveTimer.current = setTimeout(async () => {
+      if (!sessionId) return;
+      try {
+        // undefined is sent as null: the field becomes missing again
+        const body = Object.fromEntries(Object.entries(updates).map(([k, v]) => [k, v ?? null]));
+        const s = await api.sessions.updateProfile(sessionId, body, 'manual');
+        setLastComparison(s.lastComparison);
+      } catch (err) {
+        showError(err);
+      }
+    }, PROFILE_SAVE_DELAY_MS);
   };
 
   // Sample questions chips
@@ -405,7 +243,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand"
             >
               <option value="">ללא: שיחה חדשה עם נתונים אמיתיים</option>
-              {(employeesData as any[]).map((emp) => (
+              {sampleEmployees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name} ({emp.occupation} · קבוצה {emp.group})
                 </option>
@@ -445,10 +283,13 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
           {sampleChips.map((chip, idx) => (
             <button
               key={idx}
-              onClick={async () => {
-                const loaded = await handleLoadSampleEmployee(chip.empId);
-                handleSendMessage(chip.text, loaded);
-              }}
+              onClick={() =>
+                runExclusive(async () => {
+                  if (!sessionId) return;
+                  applyState(await api.sessions.loadSample(sessionId, chip.empId));
+                  await sendToAgent(chip.text, sessionId);
+                })
+              }
               className={`text-xs px-3 py-1.5 rounded-full text-ink border transition-colors ${CHIP_COLORS[idx % CHIP_COLORS.length]}`}
             >
               {chip.label}
@@ -603,31 +444,12 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
               comparison={lastComparison}
               onSelectCarAgain={() => handleSendMessage('אילו רכבים נוספים אני יכול לבחור בקבוצה שלי?')}
               onCompareAnother={() => handleSendMessage('מה קורה אם אני מוותר על הרכב ומקבל אחזקה?')}
-              onAskRep={async () => {
-                const ticketId = `TICK-${Date.now().toString().slice(-4)}`;
-                const ticket: SupportTicket = {
-                  id: ticketId,
-                  sessionId,
-                  question: `שאלה לגבי השוואת שכר בין ${lastComparison.todayCarLabel} ל-${lastComparison.altCarLabel}`,
-                  summary: `העובד ביקש בירור ידני לגבי השוואת השכר המוצגת.`,
-                  status: 'open',
-                  profile,
-                  lastComparison,
-                  transcript: messages,
-                  createdAt: Date.now(),
-                };
-                await storage.saveTicket(ticket);
-                onTicketCreated();
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: `tick-${Date.now()}`,
-                    role: 'system',
-                    content: `הפנייה נשלחה לנציג שכר (מספר פנייה: ${ticketId}). נציג יבדוק את הנתונים וישיב בהקדם.`,
-                    timestamp: Date.now(),
-                  },
-                ]);
-              }}
+              onAskRep={() =>
+                runExclusive(async () => {
+                  if (!sessionId) return;
+                  applyState(await api.sessions.askRep(sessionId));
+                })
+              }
               onShowRankedOptions={() => handleSendMessage('איזה רכב בקטלוג הכי משתלם לי מבחינת הנטו?')}
             />
           )}
@@ -668,12 +490,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
                     value={profile.base ?? ''}
                     onChange={(e) => {
                       const raw = e.target.value;
-                      const base = raw === '' || Number(raw) < 0 ? undefined : Number(raw);
-                      const updated = { ...profile, base } as EmployeeProfile;
-                      setProfile(updated);
-                      storage.saveProfile(sessionId, updated);
-                      const recomputed = lastComparison ? recomputeIfComplete(updated, lastComparison) : null;
-                      if (recomputed) setLastComparison(recomputed);
+                      handleProfileEdit({ base: raw === '' || Number(raw) < 0 ? undefined : Number(raw) });
                     }}
                     className="w-24 px-2 py-1 text-xs font-bold border border-slate-300 rounded bg-white"
                   />
@@ -762,24 +579,12 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({
       <PayslipModal
         isOpen={isPayslipModalOpen}
         onClose={() => setIsPayslipModalOpen(false)}
-        onApplyExtractedData={async (extracted) => {
-          setProfile((prev) => {
-            const updated = { ...prev, ...extracted };
-            storage.saveProfile(sessionId, updated);
-            const recomputed = lastComparison ? recomputeIfComplete(updated, lastComparison) : null;
-            if (recomputed) setLastComparison(recomputed);
-            return updated;
-          });
-
-          const confirmMsg: ChatMessage = {
-            id: `sys-${Date.now()}`,
-            role: 'system',
-            content: 'נתוני תלוש השכר מוזגו בהצלחה לתוך הפרופיל. המחשבון עודכן.',
-            timestamp: Date.now(),
-          };
-          setMessages((prev) => [...prev, confirmMsg]);
-          await storage.addMessage(sessionId, confirmMsg);
-        }}
+        onApplyExtractedData={(extracted) =>
+          runExclusive(async () => {
+            if (!sessionId) return;
+            applyState(await api.sessions.updateProfile(sessionId, extracted, 'payslip'));
+          })
+        }
       />
     </div>
   );

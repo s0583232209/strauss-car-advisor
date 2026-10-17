@@ -17,11 +17,16 @@ import {
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
-import React from 'react';
-import { getRules } from '../engine/rules.ts';
+import React, { useEffect, useState } from 'react';
+import { api } from '../api/client.ts';
 
 export const GuideView: React.FC = () => {
-  const rules = getRules();
+  // Group budgets come from the server rules (the admin may have changed them)
+  const [budgets, setBudgets] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    api.meta().then((m) => setBudgets(m.rules.budgets)).catch(() => undefined);
+  }, []);
+  const budget = (group: string) => (budgets ? budgets[group] : '…');
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -113,7 +118,7 @@ export const GuideView: React.FC = () => {
               <tr>
                 <td className="p-3 font-bold text-slate-900">תקציבי רכב לפי קבוצה</td>
                 <td className="p-3">
-                  קבוצה א: {rules.budgets['א']} ₪ · קבוצה ב: {rules.budgets['ב']} ₪ · קבוצה ג: {rules.budgets['ג']} ₪ · קבוצה ד: {rules.budgets['ד']} ₪
+                  קבוצה א: {budget('א')} ₪ · קבוצה ב: {budget('ב')} ₪ · קבוצה ג: {budget('ג')} ₪ · קבוצה ד: {budget('ד')} ₪
                 </td>
                 <td className="p-3 text-slate-600">תקציב מקסימלי לרכב חברה. עודף תקציב אינו נפדה במזומן.</td>
               </tr>
