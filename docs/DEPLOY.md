@@ -5,7 +5,7 @@ never reaches the database or the model: everything goes through `/api`.
 
 ```
 Browser (src/, React)  ──HTTPS /api──▶  API layer (server/api)
-                                           │ validation, CORS, rate limits, Bearer tokens
+                                           │ validation, CORS, rate limits, login cookies + roles
                                            ▼
                                         Business logic (server/bl)
                                            │ engine, agent, Gemini client, services
@@ -19,9 +19,25 @@ Browser (src/, React)  ──HTTPS /api──▶  API layer (server/api)
    policies and revokes all access from `anon`/`authenticated`. Only the service role can read data.
 2. Copy the project URL and the **service role** key (Settings → API). Never put this key in client
    code or in a `VITE_*` variable.
+3. Users: Authentication → Providers → Email on, "Allow new users to sign up" off. Create each user
+   under Authentication → Users (Auto Confirm). The trigger in `schema.sql` gives every new user the
+   role `employee`; promote with
+   `UPDATE app_users SET role = 'rep' WHERE user_id = (SELECT id FROM auth.users WHERE email = '...');`
 
-Without Supabase the server stores data as JSON files in `DATA_DIR`. Use that only for a single
-instance with a persistent disk (a Docker volume on `/app/.data`).
+Roles and screens:
+
+| Role | Screens | API |
+|---|---|---|
+| `employee` | Employee | own conversations (`/sessions`), `/payslip`, `/meta` |
+| `rep` | Employee, Rep | as employee + `/tickets` |
+| `admin` | all, incl. Data and Guide | as rep + `/admin` |
+
+Without a login every API call except `/auth`, `/health` and `/tickets/summary` returns 401; a
+role that is not allowed gets 403; someone else's conversation is 404. A user with no `app_users`
+row cannot log in. A role change reaches a logged-in user within 60 seconds (token cache).
+
+Without Supabase the server has no login (every screen is open) and stores data as JSON files in
+`DATA_DIR`. Development only; production refuses to start without Supabase.
 
 ## 2. Environment variables
 
@@ -31,15 +47,14 @@ All are server-side; see `.env.example` for the full list.
 |---|---|
 | `GEMINI_API_KEY` | required |
 | `GEMINI_MODEL` | recommended, e.g. `gemini-3.5-flash-lite,gemini-3.1-flash-lite` |
-| `REP_ACCESS_TOKEN`, `ADMIN_ACCESS_TOKEN` | required, at least 16 characters, different from each other |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | recommended (both or neither) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | required (storage and login) |
 | `TRUST_PROXY` | `1` behind a load balancer (Cloud Run, Render, Fly, nginx) |
 | `ALLOWED_ORIGINS` | only if another site must call the API |
 
 The server refuses to start in production when a required variable is missing, and warns about the
-old `VITE_SUPABASE_*` / `VITE_FALLBACK_*` names.
+old `VITE_SUPABASE_*` / `VITE_FALLBACK_*` names and the unused `REP_ACCESS_TOKEN` / `ADMIN_ACCESS_TOKEN`.
 
-Generate access codes with: `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`
+Generate user passwords with: `node -e "console.log(require('crypto').randomBytes(12).toString('base64url'))"`
 
 ## 3. Build and run
 

@@ -10,6 +10,8 @@
 
 import type {
   AdminOverview,
+  AuthStatus,
+  AuthUser,
   CalibrationSummary,
   ChatStreamEvent,
   EmployeeProfile,
@@ -21,17 +23,14 @@ import type {
   VehicleLookupResult,
 } from '../../shared/types.ts';
 
-export type Role = 'rep' | 'admin';
-
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);
   }
 }
 
-// Per-browser conveniences: a lost value only means a new conversation or typing the code again
+// Per-browser convenience: a lost value only means the server looks up the user's last conversation
 const SESSION_KEY = 'yoetz_session_id';
-const tokenKey = (role: Role) => `yoetz_${role}_token`;
 
 function storageGet(store: () => Storage, key: string): string | null {
   try {
@@ -49,19 +48,54 @@ function storageSet(store: () => Storage, key: string, value: string | null): vo
   }
 }
 
-export const accessToken = {
-  get: (role: Role) => storageGet(() => sessionStorage, tokenKey(role)),
-  set: (role: Role, token: string | null) => storageSet(() => sessionStorage, tokenKey(role), token),
-};
+/*
+ * Login lives in httpOnly cookies that this code never sees. The access cookie is short-lived; when
+ * a call gets 401, GET /api/auth/me renews it with the refresh cookie and the call is sent once more.
+ * If that fails too, the app is told to show the login screen.
+ */
+let onLoggedOut: () => void = () => undefined;
+export function setLoggedOutHandler(handler: () => void): void {
+  onLoggedOut = handler;
+}
+
+let renewing: Promise<boolean> | null = null;
+function renewLogin(): Promise<boolean> {
+  renewing ??= fetch('/api/auth/me')
+    .then(async (res) => res.ok && Boolean(((await res.json()) as AuthStatus).user))
+    .catch(() => false)
+    .finally(() => {
+      renewing = null;
+    });
+  return renewing;
+}
+
+async function fetchWithLogin(url: string, init: RequestInit): Promise<Response> {
+  const res = await fetch(url, init);
+  if (res.status !== 401 || url.startsWith('/api/auth/')) return res;
+  if (await renewLogin()) {
+    const retry = await fetch(url, init);
+    if (retry.status !== 401) return retry;
+  }
+  onLoggedOut();
+  return res;
+}
+
+async function errorFrom(res: Response): Promise<ApiError> {
+  let message = `שגיאת שרת (${res.status})`;
+  try {
+    message = (await res.json()).error || message;
+  } catch {
+    // Not JSON
+  }
+  return new ApiError(res.status, message);
+}
 
 async function request<T>(
   method: string,
   path: string,
-  options: { body?: unknown; role?: Role; raw?: BodyInit; contentType?: string } = {}
+  options: { body?: unknown; raw?: BodyInit; contentType?: string } = {}
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = options.role ? accessToken.get(options.role) : null;
-  if (token) headers.Authorization = `Bearer ${token}`;
   let body: BodyInit | undefined;
   if (options.raw !== undefined) {
     body = options.raw;
@@ -71,37 +105,50 @@ async function request<T>(
     headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(`/api${path}`, { method, headers, body });
-  if (!res.ok) {
-    let message = `שגיאת שרת (${res.status})`;
-    try {
-      message = (await res.json()).error || message;
-    } catch {
-      // Not JSON
-    }
-    throw new ApiError(res.status, message);
-  }
+  const res = await fetchWithLogin(`/api${path}`, { method, headers, body });
+  if (!res.ok) throw await errorFrom(res);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
 export const api = {
+  auth: {
+    /** enabled = false: the server has no login (development), every screen is open */
+    me: () => request<AuthStatus>('GET', '/auth/me'),
+    login: (email: string, password: string) => request<AuthUser>('POST', '/auth/login', { body: { email, password } }),
+    async logout(): Promise<void> {
+      // The conversation belongs to the user who leaves; the next user finds theirs on the server
+      storageSet(() => localStorage, SESSION_KEY, null);
+      await request<void>('POST', '/auth/logout');
+    },
+  },
+
   meta: () => request<{ sampleEmployees: SampleEmployee[]; rules: Rules }>('GET', '/meta'),
 
   sessions: {
-    /** This browser's conversation, or a new one when there is none (or it no longer exists) */
+    /**
+     * This browser's conversation; else the user's latest one (from any device); else a new one.
+     * The server answers 404 for a conversation that belongs to someone else.
+     */
     async current(): Promise<SessionState> {
+      const notFound = (err: unknown) => err instanceof ApiError && (err.status === 404 || err.status === 400);
       const id = storageGet(() => localStorage, SESSION_KEY);
       if (id) {
         try {
           return await request<SessionState>('GET', `/sessions/${id}`);
         } catch (err) {
-          if (!(err instanceof ApiError) || (err.status !== 404 && err.status !== 400)) throw err;
+          if (!notFound(err)) throw err;
         }
       }
-      const created = await request<SessionState>('POST', '/sessions');
-      storageSet(() => localStorage, SESSION_KEY, created.id);
-      return created;
+      let session: SessionState;
+      try {
+        session = await request<SessionState>('GET', '/sessions/mine');
+      } catch (err) {
+        if (!notFound(err)) throw err;
+        session = await request<SessionState>('POST', '/sessions');
+      }
+      storageSet(() => localStorage, SESSION_KEY, session.id);
+      return session;
     },
     reset: (id: string) => request<SessionState>('POST', `/sessions/${id}/reset`),
     loadSample: (id: string, employeeId: string) => request<SessionState>('POST', `/sessions/${id}/sample`, { body: { employeeId } }),
@@ -118,20 +165,12 @@ export const api = {
       repParticipationMode: boolean,
       onEvent: (event: ChatStreamEvent) => void
     ): Promise<SessionState> {
-      const res = await fetch(`/api/sessions/${id}/messages`, {
+      const res = await fetchWithLogin(`/api/sessions/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, repParticipationMode }),
       });
-      if (!res.ok || !res.body) {
-        let message = `שגיאת שרת (${res.status})`;
-        try {
-          message = (await res.json()).error || message;
-        } catch {
-          // Not JSON
-        }
-        throw new ApiError(res.status, message);
-      }
+      if (!res.ok || !res.body) throw await errorFrom(res);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -159,21 +198,21 @@ export const api = {
 
   tickets: {
     openCount: async () => (await request<{ open: number }>('GET', '/tickets/summary')).open,
-    list: () => request<SupportTicket[]>('GET', '/tickets', { role: 'rep' }),
+    list: () => request<SupportTicket[]>('GET', '/tickets'),
     answer: (id: string, answer: { status: 'answered' | 'closed'; text?: string; value?: number; effectiveFrom?: string }) =>
-      request<SupportTicket>('POST', `/tickets/${id}/answer`, { body: answer, role: 'rep' }),
+      request<SupportTicket>('POST', `/tickets/${id}/answer`, { body: answer }),
   },
 
   admin: {
-    overview: () => request<AdminOverview>('GET', '/admin/overview', { role: 'admin' }),
-    saveRules: (rules: unknown) => request<Rules>('PUT', '/admin/rules', { body: { rules }, role: 'admin' }),
-    resetRules: () => request<Rules>('POST', '/admin/rules/reset', { role: 'admin' }),
-    runCalibration: () => request<CalibrationSummary>('POST', '/admin/calibration', { role: 'admin' }),
+    overview: () => request<AdminOverview>('GET', '/admin/overview'),
+    saveRules: (rules: unknown) => request<Rules>('PUT', '/admin/rules', { body: { rules } }),
+    resetRules: () => request<Rules>('POST', '/admin/rules/reset'),
+    runCalibration: () => request<CalibrationSummary>('POST', '/admin/calibration'),
     uploadTaxCsv: (file: File) =>
-      request<{ count: number }>('POST', '/admin/tax-records', { raw: file, contentType: 'text/csv', role: 'admin' }),
-    clearTaxRecords: () => request<void>('DELETE', '/admin/tax-records', { role: 'admin' }),
+      request<{ count: number }>('POST', '/admin/tax-records', { raw: file, contentType: 'text/csv' }),
+    clearTaxRecords: () => request<void>('DELETE', '/admin/tax-records'),
     lookup: async (q: { year: string; type: string; product: string; model: string }) =>
-      (await request<{ result: VehicleLookupResult | null }>('GET', `/admin/tax-records/lookup?${new URLSearchParams(q)}`, { role: 'admin' })).result,
+      (await request<{ result: VehicleLookupResult | null }>('GET', `/admin/tax-records/lookup?${new URLSearchParams(q)}`)).result,
   },
 
   payslip: {

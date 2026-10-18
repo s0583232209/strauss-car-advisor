@@ -77,6 +77,14 @@ export class FileRepository implements Repository {
     return s ? structuredClone(s) : null;
   }
 
+  async findLatestSessionId(userId: string): Promise<string | null> {
+    let latest: SessionRecord | null = null;
+    for (const s of Object.values((await this.app()).sessions)) {
+      if (s.userId === userId && (!latest || s.updatedAt > latest.updatedAt)) latest = s;
+    }
+    return latest?.id ?? null;
+  }
+
   async saveSessionState(session: Omit<SessionRecord, 'messages'>): Promise<void> {
     const data = await this.app();
     data.sessions[session.id] = { ...structuredClone(session), messages: data.sessions[session.id]?.messages ?? [] };

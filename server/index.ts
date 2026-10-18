@@ -44,7 +44,6 @@ async function main() {
     dataDir: config.dataDir,
   });
   const authGateway = createAuthGateway(config);
-  if (!authGateway) console.warn('[config] No Supabase: login is off and every screen is open (development only)');
 
   // Business Logic Layer
   const gemini = createGemini(config.gemini);

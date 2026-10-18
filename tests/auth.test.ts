@@ -9,67 +9,14 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { AuthStatus, AuthUser, UserRole } from '../shared/types.ts';
+import type { AuthStatus, AuthUser } from '../shared/types.ts';
 import { createApp } from '../server/api/app.ts';
 import { createAdminService } from '../server/bl/services/adminService.ts';
 import { AuthError, createAuthService, type AuthService } from '../server/bl/services/authService.ts';
 import { createSessionService } from '../server/bl/services/sessionService.ts';
 import { createTicketService } from '../server/bl/services/ticketService.ts';
 import { FileRepository } from '../server/dal/fileRepository.ts';
-import type { AuthAttempt, AuthGateway } from '../server/dal/types.ts';
-
-const PASSWORD = 'correct horse battery';
-
-/** In-memory stand-in for Supabase Auth */
-class FakeGateway implements AuthGateway {
-  users = new Map([
-    ['employee1@example.com', 'u-employee'],
-    ['rep@example.com', 'u-rep'],
-    ['norole@example.com', 'u-norole'],
-  ]);
-  access = new Map<string, string>(); // access token → user id
-  refreshTokens = new Map<string, string>(); // refresh token → user id
-  getUserCalls = 0;
-  signedOut: string[] = [];
-  rateLimited = false;
-  private n = 0;
-
-  private issue(userId: string): AuthAttempt {
-    const n = ++this.n;
-    this.access.set(`at-${n}`, userId);
-    this.refreshTokens.set(`rt-${n}`, userId);
-    const email = [...this.users].find(([, id]) => id === userId)![0];
-    return { ok: true, tokens: { accessToken: `at-${n}`, refreshToken: `rt-${n}`, expiresIn: 3600, user: { id: userId, email } } };
-  }
-
-  async signInWithPassword(email: string, password: string): Promise<AuthAttempt> {
-    if (this.rateLimited) return { ok: false, reason: 'rate_limited' };
-    const id = this.users.get(email);
-    return id && password === PASSWORD ? this.issue(id) : { ok: false, reason: 'invalid' };
-  }
-
-  async refresh(refreshToken: string): Promise<AuthAttempt> {
-    const id = this.refreshTokens.get(refreshToken);
-    if (!id) return { ok: false, reason: 'invalid' };
-    this.refreshTokens.delete(refreshToken); // single use, like Supabase
-    return this.issue(id);
-  }
-
-  async getUser(accessToken: string) {
-    this.getUserCalls++;
-    const id = this.access.get(accessToken);
-    if (!id) return null;
-    return { id, email: [...this.users].find(([, u]) => u === id)![0] };
-  }
-
-  async signOut(accessToken: string) {
-    this.signedOut.push(accessToken);
-    this.access.delete(accessToken);
-  }
-}
-
-const roles: Record<string, UserRole> = { 'u-employee': 'employee', 'u-rep': 'rep' };
-const roleRepo = { getUserRole: async (id: string) => roles[id] ?? null };
+import { FakeGateway, PASSWORD, roleRepo } from './fakeAuth.ts';
 
 describe('auth service', () => {
   let gateway: FakeGateway;
@@ -141,7 +88,7 @@ describe('/api/auth', () => {
   async function start(opts: { auth: AuthService | null; isProduction?: boolean }): Promise<string> {
     const repo = new FileRepository(dataDir);
     const app = createApp({
-      config: { isProduction: opts.isProduction ?? false, trustProxy: false, allowedOrigins: [], repAccessToken: undefined, adminAccessToken: undefined },
+      config: { isProduction: opts.isProduction ?? false, trustProxy: false, allowedOrigins: [] },
       sessions: createSessionService(repo),
       tickets: createTicketService(repo),
       admin: createAdminService(repo),

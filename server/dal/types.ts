@@ -12,6 +12,8 @@ import type { ChatMessage, ComparisonResult, EmployeeProfile, Rules, SupportTick
 
 export interface SessionRecord {
   id: string;
+  /** The logged-in user who owns the conversation; absent only without login (development) */
+  userId?: string;
   profile: EmployeeProfile;
   lastComparison: ComparisonResult | null;
   /** Fields the bot asked and the employee has not answered yet (agent state, never sent to the client) */
@@ -39,6 +41,8 @@ export interface Repository {
   readonly kind: 'supabase' | 'file';
 
   getSession(id: string): Promise<SessionRecord | null>;
+  /** The user's most recently updated conversation, or null */
+  findLatestSessionId(userId: string): Promise<string | null>;
   /** Saves everything but the messages */
   saveSessionState(session: Omit<SessionRecord, 'messages'>): Promise<void>;
   appendMessages(sessionId: string, messages: ChatMessage[]): Promise<void>;

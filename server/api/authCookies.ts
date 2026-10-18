@@ -8,8 +8,8 @@
  * keeps other sites from sending them. The refresh token is sent only to /api/auth.
  */
 
-import type { Request, Response } from 'express';
-import type { AuthUser } from '../../shared/types.ts';
+import type { Request, RequestHandler, Response } from 'express';
+import type { AuthUser, UserRole } from '../../shared/types.ts';
 import type { AuthService } from '../bl/services/authService.ts';
 import type { AuthTokens } from '../dal/index.ts';
 
@@ -74,4 +74,31 @@ export async function resolveUser(req: Request, res: Response, auth: AuthService
   }
   setAuthCookies(res, renewed.tokens, secure);
   return renewed.user;
+}
+
+export const ALL_ROLES: readonly UserRole[] = ['employee', 'rep', 'admin'];
+
+/**
+ * Lets a request through only for a logged-in user with one of the roles, and puts the user in
+ * res.locals.user. 401 without a valid access cookie: the client renews it with GET /api/auth/me
+ * (the refresh cookie is not sent here) and retries. 403 for a role that is not allowed.
+ * auth = null (development without Supabase): open, as the server warns at startup.
+ */
+export function requireRole(auth: AuthService | null, roles: readonly UserRole[]): RequestHandler {
+  return (req, res, next) => {
+    if (!auth) return next();
+    const access = readCookie(req, ACCESS_COOKIE);
+    (access ? auth.verify(access) : Promise.resolve(null)).then((user) => {
+      if (!user) {
+        res.status(401).json({ error: 'נדרשת כניסה למערכת' });
+        return;
+      }
+      if (!roles.includes(user.role)) {
+        res.status(403).json({ error: 'אין לך הרשאה למסך הזה' });
+        return;
+      }
+      res.locals.user = user;
+      next();
+    }, next);
+  };
 }

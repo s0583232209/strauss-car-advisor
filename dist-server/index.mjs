@@ -6,7 +6,7 @@ import express4 from "express";
 import path3 from "node:path";
 
 // server/api/app.ts
-import express3, { Router as Router5 } from "express";
+import express3, { Router as Router6 } from "express";
 
 // server/data/strauss-rules.json
 var strauss_rules_default = {
@@ -2745,9 +2745,11 @@ function createSessionService(repo, now = Date.now) {
     }
   }
   return {
-    async create() {
+    /** userId = the logged-in owner; undefined only without login (development) */
+    async create(userId) {
       const s = {
         id: randomUUID(),
+        ...userId ? { userId } : {},
         profile: emptyProfile(),
         lastComparison: null,
         messages: [],
@@ -2759,6 +2761,20 @@ function createSessionService(repo, now = Date.now) {
       return toState(s);
     },
     async get(id) {
+      return toState(await load(id));
+    },
+    /**
+     * Someone else's conversation looks like a missing one (404), so ids cannot be probed.
+     * userId undefined = no login (development): every conversation is open, as before.
+     */
+    async assertOwner(id, userId) {
+      const s = await load(id);
+      if (userId !== void 0 && s.userId !== userId) throw new NotFoundError("session not found");
+    },
+    /** The user's latest conversation, to continue it on another device */
+    async latestFor(userId) {
+      const id = await repo.findLatestSessionId(userId);
+      if (!id) throw new NotFoundError("session not found");
       return toState(await load(id));
     },
     /** New conversation: an empty profile, no data carried over */
@@ -2858,8 +2874,81 @@ function createSessionService(repo, now = Date.now) {
   };
 }
 
+// server/api/authCookies.ts
+var ACCESS_COOKIE = "yoetz_at";
+var REFRESH_COOKIE = "yoetz_rt";
+var ACCESS_PATH = "/api";
+var REFRESH_PATH = "/api/auth";
+var REFRESH_MAX_AGE_S = 7 * 24 * 60 * 60;
+function readCookie(req, name) {
+  for (const part of (req.headers.cookie ?? "").split(";")) {
+    const eq = part.indexOf("=");
+    if (eq > 0 && part.slice(0, eq).trim() === name) {
+      const value = part.slice(eq + 1).trim();
+      try {
+        return decodeURIComponent(value) || void 0;
+      } catch {
+        return void 0;
+      }
+    }
+  }
+  return void 0;
+}
+function cookie(name, value, path4, maxAgeS, secure) {
+  return [
+    `${name}=${encodeURIComponent(value)}`,
+    `Path=${path4}`,
+    `Max-Age=${maxAgeS}`,
+    "HttpOnly",
+    "SameSite=Strict",
+    ...secure ? ["Secure"] : []
+  ].join("; ");
+}
+function setAuthCookies(res, tokens, secure) {
+  res.append("Set-Cookie", cookie(ACCESS_COOKIE, tokens.accessToken, ACCESS_PATH, Math.max(1, Math.floor(tokens.expiresIn)), secure));
+  res.append("Set-Cookie", cookie(REFRESH_COOKIE, tokens.refreshToken, REFRESH_PATH, REFRESH_MAX_AGE_S, secure));
+}
+function clearAuthCookies(res, secure) {
+  res.append("Set-Cookie", cookie(ACCESS_COOKIE, "", ACCESS_PATH, 0, secure));
+  res.append("Set-Cookie", cookie(REFRESH_COOKIE, "", REFRESH_PATH, 0, secure));
+}
+async function resolveUser(req, res, auth, secure) {
+  const access = readCookie(req, ACCESS_COOKIE);
+  if (access) {
+    const user = await auth.verify(access);
+    if (user) return user;
+  }
+  const refresh = readCookie(req, REFRESH_COOKIE);
+  if (!refresh) return null;
+  const renewed = await auth.refresh(refresh);
+  if (!renewed) {
+    clearAuthCookies(res, secure);
+    return null;
+  }
+  setAuthCookies(res, renewed.tokens, secure);
+  return renewed.user;
+}
+var ALL_ROLES = ["employee", "rep", "admin"];
+function requireRole(auth, roles) {
+  return (req, res, next) => {
+    if (!auth) return next();
+    const access = readCookie(req, ACCESS_COOKIE);
+    (access ? auth.verify(access) : Promise.resolve(null)).then((user) => {
+      if (!user) {
+        res.status(401).json({ error: "\u05E0\u05D3\u05E8\u05E9\u05EA \u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05DE\u05E2\u05E8\u05DB\u05EA" });
+        return;
+      }
+      if (!roles.includes(user.role)) {
+        res.status(403).json({ error: "\u05D0\u05D9\u05DF \u05DC\u05DA \u05D4\u05E8\u05E9\u05D0\u05D4 \u05DC\u05DE\u05E1\u05DA \u05D4\u05D6\u05D4" });
+        return;
+      }
+      res.locals.user = user;
+      next();
+    }, next);
+  };
+}
+
 // server/api/middleware.ts
-import { timingSafeEqual } from "node:crypto";
 var asyncHandler = (fn) => (req, res, next) => {
   fn(req, res, next).catch(next);
 };
@@ -2936,23 +3025,6 @@ function rateLimit(options) {
     if (h.count > options.max) {
       res.setHeader("Retry-After", String(Math.ceil((h.resetAt - now) / 1e3)));
       res.status(429).json({ error: "\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05D1\u05E7\u05E9\u05D5\u05EA. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05E8\u05D2\u05E2." });
-      return;
-    }
-    next();
-  };
-}
-function sameSecret(a, b) {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
-}
-function requireToken(token) {
-  return (req, res, next) => {
-    if (!token) return next();
-    const header = req.headers.authorization ?? "";
-    const given = header.startsWith("Bearer ") ? header.slice(7) : "";
-    if (!given || !sameSecret(given, token)) {
-      res.status(401).json({ error: "\u05E0\u05D3\u05E8\u05E9 \u05E7\u05D5\u05D3 \u05D2\u05D9\u05E9\u05D4" });
       return;
     }
     next();
@@ -3108,6 +3180,15 @@ function profileUpdateBody(body) {
   }
   return { updates, source };
 }
+var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function loginBody(body) {
+  const b = object(body, ["email", "password"], "\u05DB\u05E0\u05D9\u05E1\u05D4");
+  const email = text(b.email, "email", 254).toLowerCase();
+  if (!EMAIL.test(email)) fail("email: \u05DB\u05EA\u05D5\u05D1\u05EA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4");
+  if (typeof b.password !== "string" || !b.password) fail("password: \u05E9\u05D3\u05D4 \u05D7\u05D5\u05D1\u05D4");
+  if (b.password.length > 128) fail("password: \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9 (\u05E2\u05D3 128 \u05EA\u05D5\u05D5\u05D9\u05DD)");
+  return { email, password: b.password };
+}
 function ticketAnswerBody(body) {
   const b = object(body, ["status", "text", "value", "effectiveFrom"], "\u05EA\u05E9\u05D5\u05D1\u05EA \u05E0\u05E6\u05D9\u05D2");
   if (b.status !== "answered" && b.status !== "closed") fail("status: \u05E2\u05E8\u05DA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF");
@@ -3161,9 +3242,8 @@ function lookupQuery(q) {
 
 // server/api/routes/admin.ts
 var TAX_FILE_LIMIT = "80mb";
-function adminRouter(admin, adminAccessToken) {
+function adminRouter(admin) {
   const router = Router();
-  router.use(requireToken(adminAccessToken));
   router.get("/overview", asyncHandler(async (_req, res) => {
     res.json(await admin.overview());
   }));
@@ -3203,10 +3283,42 @@ function adminRouter(admin, adminAccessToken) {
   return router;
 }
 
-// server/api/routes/payslip.ts
-import express2, { Router as Router2 } from "express";
-function payslipRouter(extract) {
+// server/api/routes/auth.ts
+import { Router as Router2 } from "express";
+function authRouter(auth, secureCookies) {
   const router = Router2();
+  const loginLimit = rateLimit({ name: "login", windowMs: 15 * 6e4, max: 10 });
+  router.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
+  router.get("/me", asyncHandler(async (req, res) => {
+    const status = auth ? { enabled: true, user: await resolveUser(req, res, auth, secureCookies) } : { enabled: false, user: null };
+    res.json(status);
+  }));
+  router.post("/login", loginLimit, asyncHandler(async (req, res) => {
+    if (!auth) {
+      res.status(503).json({ error: "\u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05D0\u05D9\u05E0\u05D4 \u05DE\u05D5\u05D2\u05D3\u05E8\u05EA \u05D1\u05E9\u05E8\u05EA" });
+      return;
+    }
+    const { email, password } = loginBody(req.body);
+    const { tokens, user } = await auth.login(email, password);
+    setAuthCookies(res, tokens, secureCookies);
+    res.json(user);
+  }));
+  router.post("/logout", asyncHandler(async (req, res) => {
+    const access = readCookie(req, ACCESS_COOKIE);
+    if (auth && access) await auth.logout(access);
+    clearAuthCookies(res, secureCookies);
+    res.status(204).end();
+  }));
+  return router;
+}
+
+// server/api/routes/payslip.ts
+import express2, { Router as Router3 } from "express";
+function payslipRouter(extract) {
+  const router = Router3();
   router.post(
     "/extract",
     rateLimit({ name: "payslip", windowMs: 10 * 6e4, max: 10 }),
@@ -3221,13 +3333,25 @@ function payslipRouter(extract) {
 }
 
 // server/api/routes/sessions.ts
-import { Router as Router3 } from "express";
+import { Router as Router4 } from "express";
 function sessionsRouter(sessions) {
-  const router = Router3();
+  const router = Router4();
   const messageLimit = rateLimit({ name: "messages", windowMs: 6e4, max: 30 });
   const createLimit = rateLimit({ name: "session-create", windowMs: 6e4, max: 20 });
+  const userId = (res) => res.locals.user?.id;
+  router.param("id", (req, res, next, raw) => {
+    Promise.resolve().then(() => sessions.assertOwner(sessionId(raw), userId(res))).then(() => next(), next);
+  });
   router.post("/", createLimit, asyncHandler(async (_req, res) => {
-    res.status(201).json(await sessions.create());
+    res.status(201).json(await sessions.create(userId(res)));
+  }));
+  router.get("/mine", asyncHandler(async (_req, res) => {
+    const id = userId(res);
+    if (!id) {
+      res.status(404).json({ error: "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D4 \u05E9\u05D9\u05D7\u05D4" });
+      return;
+    }
+    res.json(await sessions.latestFor(id));
   }));
   router.get("/:id", asyncHandler(async (req, res) => {
     res.json(await sessions.get(sessionId(req.params.id)));
@@ -3283,13 +3407,13 @@ function sessionsRouter(sessions) {
 }
 
 // server/api/routes/tickets.ts
-import { Router as Router4 } from "express";
-function ticketsRouter(tickets, repAccessToken) {
-  const router = Router4();
+import { Router as Router5 } from "express";
+function ticketsRouter(tickets, repOnly) {
+  const router = Router5();
   router.get("/summary", asyncHandler(async (_req, res) => {
     res.json({ open: await tickets.openCount() });
   }));
-  router.use(requireToken(repAccessToken));
+  router.use(repOnly);
   router.get("/", asyncHandler(async (_req, res) => {
     res.json(await tickets.list());
   }));
@@ -3306,14 +3430,17 @@ function createApp(deps) {
   app.disable("x-powered-by");
   app.set("trust proxy", config.trustProxy);
   app.use(securityHeaders(config.isProduction));
-  const api = Router5();
+  const api = Router6();
   api.use(cors(config.allowedOrigins));
   api.use(rateLimit({ name: "api", windowMs: 6e4, max: 600 }));
-  api.use("/payslip", payslipRouter(deps.extractPayslip));
-  api.use("/admin", adminRouter(deps.admin, config.adminAccessToken));
+  const auth = deps.auth ?? null;
+  const anyUser = requireRole(auth, ALL_ROLES);
+  api.use("/payslip", anyUser, payslipRouter(deps.extractPayslip));
+  api.use("/admin", requireRole(auth, ["admin"]), adminRouter(deps.admin));
   api.use(express3.json({ limit: "100kb" }));
-  api.use("/sessions", sessionsRouter(deps.sessions));
-  api.use("/tickets", ticketsRouter(deps.tickets, config.repAccessToken));
+  api.use("/auth", authRouter(auth, config.isProduction));
+  api.use("/sessions", anyUser, sessionsRouter(deps.sessions));
+  api.use("/tickets", ticketsRouter(deps.tickets, requireRole(auth, ["rep", "admin"])));
   api.get("/health", (_req, res) => {
     res.json({
       status: "ok",
@@ -3321,7 +3448,7 @@ function createApp(deps) {
       ...config.isProduction ? {} : deps.healthDetails?.()
     });
   });
-  api.get("/meta", (_req, res) => {
+  api.get("/meta", anyUser, (_req, res) => {
     res.json({ sampleEmployees: sampleEmployees(), rules: getRules() });
   });
   api.use((_req, res) => {
@@ -4124,6 +4251,73 @@ function createAdminService(repo) {
   };
 }
 
+// server/bl/services/authService.ts
+import { createHash } from "node:crypto";
+var AuthError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+};
+var VERIFY_CACHE_MS = 6e4;
+var VERIFY_CACHE_MAX = 5e3;
+var tokenKey = (token) => createHash("sha256").update(token).digest("base64url");
+function createAuthService(gateway, repo, now = Date.now) {
+  const cache = /* @__PURE__ */ new Map();
+  function remember(token, user) {
+    if (cache.size >= VERIFY_CACHE_MAX) {
+      const t = now();
+      for (const [k, v] of cache) if (v.until <= t) cache.delete(k);
+      for (const k of cache.keys()) {
+        if (cache.size < VERIFY_CACHE_MAX) break;
+        cache.delete(k);
+      }
+    }
+    cache.set(tokenKey(token), { user, until: now() + VERIFY_CACHE_MS });
+  }
+  async function withRole(tokens) {
+    const role = await repo.getUserRole(tokens.user.id);
+    if (!role) return null;
+    const user = { id: tokens.user.id, email: tokens.user.email, role };
+    remember(tokens.accessToken, user);
+    return { tokens, user };
+  }
+  return {
+    async login(email, password) {
+      const attempt = await gateway.signInWithPassword(email, password);
+      if (!attempt.ok) {
+        if (attempt.reason === "rate_limited") throw new AuthError(429, "\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05E0\u05D9\u05E1\u05D9\u05D5\u05E0\u05D5\u05EA \u05DB\u05E0\u05D9\u05E1\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05DB\u05DE\u05D4 \u05D3\u05E7\u05D5\u05EA.");
+        throw new AuthError(401, "\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC \u05D0\u05D5 \u05E1\u05D9\u05E1\u05DE\u05D4 \u05E9\u05D2\u05D5\u05D9\u05D9\u05DD");
+      }
+      const result = await withRole(attempt.tokens);
+      if (!result) {
+        await gateway.signOut(attempt.tokens.accessToken);
+        throw new AuthError(403, "\u05DC\u05DE\u05E9\u05EA\u05DE\u05E9 \u05D6\u05D4 \u05D0\u05D9\u05DF \u05D4\u05E8\u05E9\u05D0\u05D4 \u05DC\u05DE\u05E2\u05E8\u05DB\u05EA. \u05E4\u05E0\u05D5 \u05DC\u05DE\u05E0\u05D4\u05DC \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA.");
+      }
+      return result;
+    },
+    async verify(accessToken) {
+      const hit = cache.get(tokenKey(accessToken));
+      if (hit && hit.until > now()) return hit.user;
+      const u = await gateway.getUser(accessToken);
+      if (!u) return null;
+      const role = await repo.getUserRole(u.id);
+      if (!role) return null;
+      const user = { id: u.id, email: u.email, role };
+      remember(accessToken, user);
+      return user;
+    },
+    async refresh(refreshToken) {
+      const attempt = await gateway.refresh(refreshToken);
+      return attempt.ok ? withRole(attempt.tokens) : null;
+    },
+    async logout(accessToken) {
+      cache.delete(tokenKey(accessToken));
+      await gateway.signOut(accessToken);
+    }
+  };
+}
+
 // server/bl/services/ticketService.ts
 function createTicketService(repo, now = Date.now) {
   return {
@@ -4159,7 +4353,6 @@ import path from "node:path";
 var ConfigError = class extends Error {
 };
 var list = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-var MIN_TOKEN_LENGTH = 16;
 function parseTrustProxy(v) {
   if (v === void 0 || v === "") return false;
   if (v === "true") return true;
@@ -4189,24 +4382,18 @@ function loadConfig(env = process.env) {
     supabaseUrl: env.SUPABASE_URL || void 0,
     supabaseServiceKey: env.SUPABASE_SERVICE_ROLE_KEY || void 0,
     dataDir: path.resolve(env.DATA_DIR || ".data"),
-    staticDir: path.resolve(env.STATIC_DIR || "dist"),
-    repAccessToken: env.REP_ACCESS_TOKEN || void 0,
-    adminAccessToken: env.ADMIN_ACCESS_TOKEN || void 0
+    staticDir: path.resolve(env.STATIC_DIR || "dist")
   };
   if (!config.gemini.apiKey) (isProduction ? errors : warnings).push("GEMINI_API_KEY is not set: the agent cannot answer");
   if (Boolean(config.supabaseUrl) !== Boolean(config.supabaseServiceKey)) {
     errors.push("Set both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or neither");
   }
   if (!config.supabaseUrl) {
-    warnings.push(`No Supabase: data is kept in local files under ${config.dataDir} (single instance, needs a persistent disk)`);
+    if (isProduction) errors.push("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production (login protects employee salary data)");
+    else warnings.push(`No Supabase: no login, every screen is open, and data is kept in local files under ${config.dataDir} (development only)`);
   }
-  for (const [name, token] of [["REP_ACCESS_TOKEN", config.repAccessToken], ["ADMIN_ACCESS_TOKEN", config.adminAccessToken]]) {
-    if (!token) {
-      if (isProduction) errors.push(`${name} is required in production (protects employee salary data)`);
-      else warnings.push(`${name} is not set: that API is open (development only)`);
-    } else if (token.length < MIN_TOKEN_LENGTH) {
-      errors.push(`${name} must be at least ${MIN_TOKEN_LENGTH} characters`);
-    }
+  for (const legacy of ["REP_ACCESS_TOKEN", "ADMIN_ACCESS_TOKEN"]) {
+    if (env[legacy]) warnings.push(`${legacy} is no longer used: users log in with Supabase Auth; delete it`);
   }
   for (const legacy of ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY", "VITE_FALLBACK_KEY", "VITE_FALLBACK_BASE_URL", "VITE_FALLBACK_MODEL"]) {
     if (env[legacy]) warnings.push(`${legacy} is no longer used: move it to the server variable (see .env.example) and delete it`);
@@ -4279,6 +4466,13 @@ var FileRepository = class {
     const s = (await this.app()).sessions[id];
     return s ? structuredClone(s) : null;
   }
+  async findLatestSessionId(userId) {
+    let latest = null;
+    for (const s of Object.values((await this.app()).sessions)) {
+      if (s.userId === userId && (!latest || s.updatedAt > latest.updatedAt)) latest = s;
+    }
+    return latest?.id ?? null;
+  }
   async saveSessionState(session) {
     const data = await this.app();
     data.sessions[session.id] = { ...structuredClone(session), messages: data.sessions[session.id]?.messages ?? [] };
@@ -4333,9 +4527,59 @@ var FileRepository = class {
   async countTaxRecords() {
     return (await this.taxMap()).size;
   }
+  // Users live in Supabase Auth only: the file store has none (login needs Supabase)
+  async getUserRole(_userId) {
+    return null;
+  }
   async clearTaxRecords() {
     (await this.taxMap()).clear();
     await this.write(this.taxFile, []);
+  }
+};
+
+// server/dal/supabaseAuth.ts
+var SupabaseAuthGateway = class {
+  constructor(url, apiKey) {
+    this.url = url;
+    this.apiKey = apiKey;
+  }
+  fetch(pathAndQuery, init = {}) {
+    return fetch(`${this.url}/auth/v1/${pathAndQuery}`, {
+      ...init,
+      headers: { apikey: this.apiKey, "Content-Type": "application/json", ...init.headers }
+    });
+  }
+  async token(grantType, body) {
+    const res = await this.fetch(`token?grant_type=${grantType}`, { method: "POST", body: JSON.stringify(body) });
+    if (res.status === 400 || res.status === 401) return { ok: false, reason: "invalid" };
+    if (res.status === 429) return { ok: false, reason: "rate_limited" };
+    if (!res.ok) throw new Error(`Supabase Auth ${grantType} failed (${res.status})`);
+    const s = await res.json();
+    return {
+      ok: true,
+      tokens: {
+        accessToken: s.access_token,
+        refreshToken: s.refresh_token,
+        expiresIn: s.expires_in,
+        user: { id: s.user.id, email: s.user.email ?? "" }
+      }
+    };
+  }
+  signInWithPassword(email, password) {
+    return this.token("password", { email, password });
+  }
+  refresh(refreshToken) {
+    return this.token("refresh_token", { refresh_token: refreshToken });
+  }
+  async getUser(accessToken) {
+    const res = await this.fetch("user", { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (res.status === 401 || res.status === 403) return null;
+    if (!res.ok) throw new Error(`Supabase Auth user failed (${res.status})`);
+    const u = await res.json();
+    return { id: u.id, email: u.email ?? "" };
+  }
+  async signOut(accessToken) {
+    await this.fetch("logout?scope=local", { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => void 0);
   }
 };
 
@@ -4382,6 +4626,7 @@ var SupabaseRepository = class {
     const messages = await this.rows(`messages?session_id=eq.${enc}&order=created_at.asc,id.asc&select=*`);
     return {
       id: session.id,
+      ...session.user_id ? { userId: session.user_id } : {},
       profile: session.profile ?? {},
       lastComparison: session.last_comparison ?? null,
       pendingFields: session.pending_fields ?? void 0,
@@ -4398,9 +4643,14 @@ var SupabaseRepository = class {
       )
     };
   }
+  async findLatestSessionId(userId) {
+    const [row] = await this.rows(`sessions?user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc&limit=1&select=id`);
+    return row?.id ?? null;
+  }
   async saveSessionState(s) {
     await this.upsert("sessions", {
       id: s.id,
+      user_id: s.userId ?? null,
       profile: s.profile,
       last_comparison: s.lastComparison,
       pending_fields: s.pendingFields ?? null,
@@ -4524,9 +4774,17 @@ var SupabaseRepository = class {
   async clearTaxRecords() {
     await this.request("tax_records?key=not.is.null", { method: "DELETE" });
   }
+  async getUserRole(userId) {
+    const [row] = await this.rows(`app_users?user_id=eq.${encodeURIComponent(userId)}&select=role`);
+    return row?.role ?? null;
+  }
 };
 
 // server/dal/index.ts
+function createAuthGateway(env) {
+  if (!env.supabaseUrl || !env.supabaseServiceKey) return null;
+  return new SupabaseAuthGateway(env.supabaseUrl.replace(/\/+$/, ""), env.supabaseServiceKey);
+}
 function createRepository(env) {
   if (env.supabaseUrl && env.supabaseServiceKey) {
     return new SupabaseRepository(env.supabaseUrl.replace(/\/+$/, ""), env.supabaseServiceKey);
@@ -4554,17 +4812,20 @@ async function main() {
     supabaseServiceKey: config.supabaseServiceKey,
     dataDir: config.dataDir
   });
+  const authGateway = createAuthGateway(config);
   const gemini = createGemini(config.gemini);
   configureLlm({ transport: gemini.generate, fallback: config.fallback });
   const admin = createAdminService(repo);
   await admin.init();
   const sessions = createSessionService(repo);
   const tickets = createTicketService(repo);
+  const auth = authGateway ? createAuthService(authGateway, repo) : null;
   const app = createApp({
     config,
     sessions,
     tickets,
     admin,
+    auth,
     extractPayslip: gemini.extractPayslip,
     healthDetails: () => ({ ...gemini.status(), storage: repo.kind })
   });

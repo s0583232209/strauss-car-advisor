@@ -51,7 +51,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
   const altNet = Math.round(comparison.altBreakdown.net);
 
   return (
-    <div className="bg-white rounded-2xl border border-line shadow-sm overflow-hidden my-4">
+    <div data-comparison-details className="bg-white rounded-2xl border border-line shadow-sm overflow-hidden my-4">
       {/* Header with Big Number */}
       <div
         className={`p-6 text-center border-b ${

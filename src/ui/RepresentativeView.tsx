@@ -18,17 +18,13 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import type { SupportTicket } from '../../shared/types.ts';
-import { accessToken, api, ApiError } from '../api/client.ts';
-import { AccessGate } from './AccessGate.tsx';
+import { api, ApiError } from '../api/client.ts';
 
 // How often the queue is refreshed from the server
 const POLL_INTERVAL_MS = 3000;
 
 export const RepresentativeView: React.FC = () => {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  // The server asked for an access code (or rejected the one given)
-  const [locked, setLocked] = useState(false);
-  const [lockError, setLockError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'answered' | 'closed'>('all');
@@ -39,13 +35,9 @@ export const RepresentativeView: React.FC = () => {
   const [effectiveFrom, setEffectiveFrom] = useState<string>('1/1');
   const [isSending, setIsSending] = useState(false);
 
+  /** A 401 already sent the app back to the login screen; anything else (e.g. 403) is shown */
   const handleApiError = (err: unknown) => {
-    if (err instanceof ApiError && err.status === 401) {
-      setLockError(accessToken.get('rep') ? 'קוד הגישה שגוי' : null);
-      accessToken.set('rep', null);
-      setLocked(true);
-      return;
-    }
+    if (err instanceof ApiError && err.status === 401) return;
     setLoadError(err instanceof Error ? err.message : 'שגיאה בטעינת הפניות');
   };
 
@@ -60,13 +52,12 @@ export const RepresentativeView: React.FC = () => {
     }
   }, []);
 
-  // Poll the ticket queue while the screen is unlocked
+  // Poll the ticket queue while the screen is open
   useEffect(() => {
-    if (locked) return;
     refresh();
     const timer = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [locked, refresh]);
+  }, [refresh]);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0] || null;
 
@@ -96,19 +87,6 @@ export const RepresentativeView: React.FC = () => {
     if (filterStatus === 'all') return true;
     return t.status === filterStatus;
   });
-
-  if (locked) {
-    return (
-      <AccessGate
-        role="rep"
-        error={lockError}
-        onUnlocked={() => {
-          setLockError(null);
-          setLocked(false);
-        }}
-      />
-    );
-  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

@@ -4,50 +4,90 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { api } from './api/client.ts';
+import type { AuthStatus } from '../shared/types.ts';
+import { api, setLoggedOutHandler } from './api/client.ts';
+import { AccessGate } from './ui/AccessGate.tsx';
+import { AccessDeniedPage } from './ui/AccessDeniedPage.tsx';
 import { AdminView } from './ui/AdminView.tsx';
 import { EmployeeView } from './ui/EmployeeView.tsx';
 import { GuideView } from './ui/GuideView.tsx';
 import { AdvisorLogo, HillsScene } from './ui/CarDecor.tsx';
-import { ActiveScreen, Header } from './ui/Header.tsx';
+import { ActiveScreen, ALL_SCREENS, Header, SCREENS_BY_ROLE } from './ui/Header.tsx';
+import { NotFoundPage } from './ui/NotFoundPage.tsx';
 import { RepresentativeView } from './ui/RepresentativeView.tsx';
 
+const LOGGED_OUT: AuthStatus = { enabled: true, user: null };
+
 export default function App() {
-  const [activeScreen, setActiveScreen] = useState<ActiveScreen>('employee');
+  const [activeScreen, setActiveScreen] = useState<ActiveScreen | null>('employee');
   const [openTicketsCount, setOpenTicketsCount] = useState<number>(0);
   const [isThrottled, setIsThrottled] = useState(false);
+  // null while GET /api/auth/me is on its way
+  const [auth, setAuth] = useState<AuthStatus | null>(null);
 
-  // Handle Hash routing
+  // Who is logged in; any call that the server refuses with 401 sends the user back to the login screen
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.toLowerCase();
-      if (hash.includes('rep')) {
-        setActiveScreen('rep');
-      } else if (hash.includes('admin')) {
-        setActiveScreen('admin');
-      } else if (hash.includes('guide')) {
-        setActiveScreen('guide');
-      } else {
-        setActiveScreen('employee');
-      }
-    };
-
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    setLoggedOutHandler(() => setAuth(LOGGED_OUT));
+    api.auth.me().then(setAuth).catch(() => setAuth(LOGGED_OUT));
   }, []);
 
-  // Sync hash when screen changes
-  const handleNavigate = (screen: ActiveScreen) => {
-    setActiveScreen(screen);
-    if (screen === 'employee') window.location.hash = '#/';
-    else if (screen === 'rep') window.location.hash = '#/rep';
-    else if (screen === 'admin') window.location.hash = '#/admin';
-    else if (screen === 'guide') window.location.hash = '#/guide';
+  const needsLogin = auth !== null && auth.enabled && !auth.user;
+  const screens: ActiveScreen[] = !auth || needsLogin ? [] : auth.user ? SCREENS_BY_ROLE[auth.user.role] : ALL_SCREENS;
+  const userRole = auth?.user?.role ?? (auth && !auth.enabled ? 'admin' : null);
+
+  // /:role/pagename — e.g. /employee/employee, /rep/rep, /admin/guide
+  const PAGE_MAP: Record<string, ActiveScreen> = { home: 'employee', rep: 'rep', admin: 'admin', guide: 'guide' };
+
+  const screenFromPath = (): ActiveScreen | null => {
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    if (parts.length === 0) return 'employee';
+    const page = parts[1]?.toLowerCase();
+    return PAGE_MAP[page] ?? null; // null → 404
   };
 
-  // Poll the open-tickets count for the header badge (a number only, no ticket content)
+  const pageSlug = (s: ActiveScreen) => s === 'employee' ? 'home' : s;
+
+  // null = 404 (unknown path); known page the user's role can't access = 403
+  const is404 = activeScreen === null;
+  const is403 = !is404 && screens.length > 0 && !screens.includes(activeScreen!);
+  const screen: ActiveScreen = (!is404 && !is403 ? activeScreen : screens[0]) ?? 'employee';
+
+  // Handle path-based routing
   useEffect(() => {
+    const handlePopState = () => setActiveScreen(screenFromPath());
+    setActiveScreen(screenFromPath());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Once role is known, redirect bare / to /:role/employee
+  useEffect(() => {
+    if (!userRole) return;
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    if (parts.length === 0) {
+      window.history.replaceState(null, '', `/${userRole}/home`);
+      setActiveScreen('employee');
+    }
+  }, [userRole]);
+
+  // Sync URL when navigating
+  const handleNavigate = (next: ActiveScreen) => {
+    setActiveScreen(next);
+    if (userRole) window.history.pushState(null, '', `/${userRole}/${pageSlug(next)}`);
+  };
+
+  const handleLogout = async () => {
+    try { await api.auth.logout(); }
+    finally {
+      setAuth(LOGGED_OUT);
+      window.history.replaceState(null, '', '/');
+    }
+  };
+
+  // Poll the open-tickets count for the header badge (a number only, no ticket content), for reps and admins
+  const showsTicketBadge = screens.includes('rep');
+  useEffect(() => {
+    if (!showsTicketBadge) return;
     let active = true;
     const refresh = () =>
       api.tickets
@@ -60,29 +100,40 @@ export default function App() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [showsTicketBadge]);
 
   return (
     <div className="min-h-screen bg-surface text-ink flex flex-col font-sans">
       {/* Top Header with role navigation */}
       <Header
-        activeScreen={activeScreen}
+        activeScreen={screen ?? 'employee'}
         onNavigate={handleNavigate}
+        screens={screens}
         openTicketCount={openTicketsCount}
         isThrottled={isThrottled}
+        userEmail={auth?.user?.email}
+        onLogout={auth?.user ? handleLogout : undefined}
       />
 
       {/* Main Screen Content */}
       <main className="flex-1">
-        {activeScreen === 'employee' && (
+        {auth === null && <div className="py-16 text-center text-sm text-slate-500">טוען...</div>}
+
+        {needsLogin && <AccessGate onLoggedIn={(user) => setAuth({ enabled: true, user })} />}
+
+        {!needsLogin && is404 && <NotFoundPage />}
+
+        {!needsLogin && is403 && <AccessDeniedPage />}
+
+        {!needsLogin && !is404 && !is403 && screen === 'employee' && (
           <EmployeeView onThrottledChange={setIsThrottled} />
         )}
 
-        {activeScreen === 'rep' && <RepresentativeView />}
+        {!needsLogin && !is404 && !is403 && screen === 'rep' && <RepresentativeView />}
 
-        {activeScreen === 'admin' && <AdminView />}
+        {!needsLogin && !is404 && !is403 && screen === 'admin' && <AdminView />}
 
-        {activeScreen === 'guide' && <GuideView />}
+        {!needsLogin && !is404 && !is403 && screen === 'guide' && <GuideView />}
       </main>
 
       {/* Footer: Strauss-green hills with vehicles slowly driving over them */}

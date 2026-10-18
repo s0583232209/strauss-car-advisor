@@ -3,17 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BookOpen, FileSpreadsheet, Headset, MessageSquare, ShieldAlert } from 'lucide-react';
+import { BookOpen, FileSpreadsheet, Headset, LogOut, MessageSquare, ShieldAlert } from 'lucide-react';
 import React from 'react';
+import type { UserRole } from '../../shared/types.ts';
 import { AdvisorLogo, StraussLogo } from './CarDecor.tsx';
 
 export type ActiveScreen = 'employee' | 'rep' | 'admin' | 'guide';
 
+export const ALL_SCREENS: ActiveScreen[] = ['employee', 'rep', 'admin', 'guide'];
+
+/** Screens each role may open. The server enforces the same split on the data (403). */
+export const SCREENS_BY_ROLE: Record<UserRole, ActiveScreen[]> = {
+  employee: ['employee'],
+  rep: ['employee', 'rep'],
+  admin: ALL_SCREENS,
+};
+
 interface HeaderProps {
   activeScreen: ActiveScreen;
   onNavigate: (screen: ActiveScreen) => void;
+  /** Tabs to show; empty on the login screen */
+  screens: ActiveScreen[];
   openTicketCount: number;
   isThrottled?: boolean;
+  /** The logged-in user; absent when the server has no login */
+  userEmail?: string;
+  onLogout?: () => void;
 }
 
 // Active tab: white pill on the blue bar; inactive: light text with a soft hover pill.
@@ -25,8 +40,11 @@ const navClass = (active: boolean) =>
 export const Header: React.FC<HeaderProps> = ({
   activeScreen,
   onNavigate,
+  screens,
   openTicketCount,
   isThrottled,
+  userEmail,
+  onLogout,
 }) => {
   return (
     <header className="sticky top-0 z-40">
@@ -49,34 +67,62 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* Navigation Role Switcher */}
-            <nav className="flex items-center gap-1 sm:gap-1.5 bg-black/10 rounded-full p-1">
-              <button onClick={() => onNavigate('employee')} className={navClass(activeScreen === 'employee')}>
-                <MessageSquare className="w-4 h-4" />
-                <span>עובד</span>
-              </button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Navigation Role Switcher: only the screens this user may open */}
+              {screens.length > 1 && (
+                <nav className="flex items-center gap-1 sm:gap-1.5 bg-black/10 rounded-full p-1">
+                  {screens.includes('employee') && (
+                    <button onClick={() => onNavigate('employee')} className={navClass(activeScreen === 'employee')}>
+                      <MessageSquare className="w-4 h-4" />
+                      <span>עובד</span>
+                    </button>
+                  )}
 
-              <button onClick={() => onNavigate('rep')} className={navClass(activeScreen === 'rep')}>
-                <Headset className="w-4 h-4" />
-                <span>נציג</span>
-                {openTicketCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-5 px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-brand rounded-full ring-2 ring-white">
-                    {openTicketCount}
+                  {screens.includes('rep') && (
+                    <button onClick={() => onNavigate('rep')} className={navClass(activeScreen === 'rep')}>
+                      <Headset className="w-4 h-4" />
+                      <span>נציג</span>
+                      {openTicketCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-5 px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-brand rounded-full ring-2 ring-white">
+                          {openTicketCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {screens.includes('admin') && (
+                    <button onClick={() => onNavigate('admin')} className={navClass(activeScreen === 'admin')}>
+                      <FileSpreadsheet className="w-4 h-4" />
+                      <span className="hidden sm:inline">נתונים ובדיקות</span>
+                      <span className="sm:hidden">ניהול</span>
+                    </button>
+                  )}
+
+                  {screens.includes('guide') && (
+                    <button onClick={() => onNavigate('guide')} className={navClass(activeScreen === 'guide')} aria-label="מדריך">
+                      <BookOpen className="w-4 h-4" />
+                      <span className="hidden sm:inline">מדריך</span>
+                    </button>
+                  )}
+                </nav>
+              )}
+
+              {userEmail && onLogout && (
+                <div className="flex items-center gap-2">
+                  <span className="hidden lg:block text-xs text-white/90 max-w-48 truncate" dir="ltr" title={userEmail}>
+                    {userEmail}
                   </span>
-                )}
-              </button>
-
-              <button onClick={() => onNavigate('admin')} className={navClass(activeScreen === 'admin')}>
-                <FileSpreadsheet className="w-4 h-4" />
-                <span className="hidden sm:inline">נתונים ובדיקות</span>
-                <span className="sm:hidden">ניהול</span>
-              </button>
-
-              <button onClick={() => onNavigate('guide')} className={navClass(activeScreen === 'guide')} aria-label="מדריך">
-                <BookOpen className="w-4 h-4" />
-                <span className="hidden sm:inline">מדריך</span>
-              </button>
-            </nav>
+                  <button
+                    onClick={onLogout}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium text-white hover:bg-white/15 transition-colors focus-visible:outline-white"
+                    aria-label={`יציאה (${userEmail})`}
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="hidden sm:inline">יציאה</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

@@ -68,7 +68,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
   const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Latest values for timers and async callbacks that would otherwise see stale closures
   const busyRef = useRef(false);
   const repModeRef = useRef(repParticipationMode);
@@ -125,9 +125,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     return () => clearInterval(timer);
   }, [sessionId]);
 
-  // Scroll to bottom on new messages
+  // Keep the conversation scrolled internally; scrollIntoView also moves the page.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages, isTyping]);
 
   /** One agent turn on the server; the status line follows what the agent is doing */
@@ -301,9 +302,9 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
       {/* Main Grid: Chat + Profile Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Chat & Comparison Card (8 cols) */}
-        <div className="lg:col-span-8 flex flex-col space-y-4">
+        <div className="lg:col-span-7 flex flex-col space-y-4">
           {/* Chat Container */}
-          <div className="bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs flex flex-col h-[520px]">
+          <div className="bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs flex flex-col h-[min(62vh,680px)] min-h-[360px]">
             {/* Chat Header */}
             <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -341,7 +342,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3.5 text-sm">
+            <div ref={messagesContainerRef} className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto space-y-3 text-sm">
               {messages.map((msg) => {
                 const isUser = msg.role === 'user';
                 const isRep = msg.role === 'rep';
@@ -397,7 +398,6 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
                 </div>
               )}
 
-              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Bar */}
@@ -456,7 +456,21 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
         </div>
 
         {/* Right Column: Collected Profile Panel (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-line border-t-[3px] border-t-green shadow-xs p-5 sticky top-24">
+        <div className="lg:col-span-4 space-y-4 sticky top-24">
+          {lastComparison && (
+            <button
+              type="button"
+              onClick={() => document.querySelector('[data-comparison-details]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              className={`w-full rounded-xl border px-4 py-3 text-right shadow-xs transition hover:shadow-sm ${lastComparison.diffNet >= 0 ? 'bg-success/5 border-success/25 text-success' : 'bg-danger/5 border-danger/25 text-danger'}`}
+              aria-label="הצגת פירוט השוואת השכר"
+            >
+              <span className="block text-xs font-medium text-slate-600">הפרש בשכר הנטו החודשי</span>
+              <span className="block text-2xl font-bold" dir="ltr">
+                {lastComparison.diffNet >= 0 ? '+' : '−'}{Math.abs(lastComparison.diffNet).toLocaleString()} ₪
+              </span>
+            </button>
+          )}
+          <div className="bg-white rounded-2xl border border-line border-t-[3px] border-t-green shadow-xs p-5">
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-lime-light text-success flex items-center justify-center">
@@ -571,6 +585,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
 
           <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400 text-center">
             שינוי נתון מחשב מחדש את תוצאת ההשוואה באופן מיידי
+          </div>
           </div>
         </div>
       </div>

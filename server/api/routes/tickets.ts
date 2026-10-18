@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/** Payroll rep API (Bearer REP_ACCESS_TOKEN). Only the open-ticket count is public. */
+/** Payroll rep API (roles rep and admin). Only the open-ticket count is public. */
 
-import { Router } from 'express';
+import { RequestHandler, Router } from 'express';
 import type { TicketService } from '../../bl/services/ticketService.ts';
-import { asyncHandler, requireToken } from '../middleware.ts';
+import { asyncHandler } from '../middleware.ts';
 import { ticketAnswerBody, ticketId } from '../validate.ts';
 
-export function ticketsRouter(tickets: TicketService, repAccessToken: string | undefined): Router {
+export function ticketsRouter(tickets: TicketService, repOnly: RequestHandler): Router {
   const router = Router();
 
   // Header badge: a number only, no ticket content
@@ -18,7 +18,7 @@ export function ticketsRouter(tickets: TicketService, repAccessToken: string | u
     res.json({ open: await tickets.openCount() });
   }));
 
-  router.use(requireToken(repAccessToken));
+  router.use(repOnly);
 
   router.get('/', asyncHandler(async (_req, res) => {
     res.json(await tickets.list());
