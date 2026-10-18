@@ -292,3 +292,19 @@ export interface AdminOverview {
   taxRecordCount: number;
   storage: 'supabase' | 'file';
 }
+
+/** Who may use what: employee chat, rep tickets, admin data */
+export type UserRole = 'employee' | 'rep' | 'admin';
+
+/** The logged-in user as the client sees it (from GET /api/auth/me) */
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: UserRole;
+}
+
+/** GET /api/auth/me: enabled = false when the server has no login (development without Supabase) */
+export interface AuthStatus {
+  enabled: boolean;
+  user: AuthUser | null;
+}

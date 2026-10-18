@@ -10,7 +10,7 @@
  * Errors are thrown, never hidden behind a local fallback.
  */
 
-import type { ChatMessage, Rules, SupportTicket, VehicleLookupResult } from '../../shared/types.ts';
+import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 import { Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 const TAX_BATCH = 1000;
@@ -216,5 +216,10 @@ export class SupabaseRepository implements Repository {
 
   async clearTaxRecords(): Promise<void> {
     await this.request('tax_records?key=not.is.null', { method: 'DELETE' });
+  }
+
+  async getUserRole(userId: string): Promise<UserRole | null> {
+    const [row] = await this.rows<{ role: UserRole }>(`app_users?user_id=eq.${encodeURIComponent(userId)}&select=role`);
+    return row?.role ?? null;
   }
 }

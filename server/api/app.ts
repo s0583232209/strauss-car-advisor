@@ -12,10 +12,12 @@ import express, { Router } from 'express';
 import type { ServerConfig } from '../config.ts';
 import { getRules } from '../bl/engine/rules.ts';
 import type { AdminService } from '../bl/services/adminService.ts';
+import type { AuthService } from '../bl/services/authService.ts';
 import { sampleEmployees, type SessionService } from '../bl/services/sessionService.ts';
 import type { TicketService } from '../bl/services/ticketService.ts';
 import { cors, errorHandler, rateLimit, securityHeaders } from './middleware.ts';
 import { adminRouter } from './routes/admin.ts';
+import { authRouter } from './routes/auth.ts';
 import { payslipRouter } from './routes/payslip.ts';
 import { sessionsRouter } from './routes/sessions.ts';
 import { ticketsRouter } from './routes/tickets.ts';
@@ -25,6 +27,8 @@ export interface AppDeps {
   sessions: SessionService;
   tickets: TicketService;
   admin: AdminService;
+  /** Login (Supabase Auth); null = no login (development with the file store) */
+  auth?: AuthService | null;
   extractPayslip: (fileData: string, mimeType: string) => Promise<unknown>;
   /** Extra details for /api/health outside production (model cooldowns, storage) */
   healthDetails?: () => Record<string, unknown>;
@@ -46,6 +50,7 @@ export function createApp(deps: AppDeps): express.Express {
   api.use('/admin', adminRouter(deps.admin, config.adminAccessToken));
 
   api.use(express.json({ limit: '100kb' }));
+  api.use('/auth', authRouter(deps.auth ?? null, config.isProduction));
   api.use('/sessions', sessionsRouter(deps.sessions));
   api.use('/tickets', ticketsRouter(deps.tickets, config.repAccessToken));
 

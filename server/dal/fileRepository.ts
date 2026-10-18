@@ -11,7 +11,7 @@
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ChatMessage, Rules, SupportTicket, VehicleLookupResult } from '../../shared/types.ts';
+import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 import { Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 interface AppData {
@@ -141,6 +141,11 @@ export class FileRepository implements Repository {
 
   async countTaxRecords(): Promise<number> {
     return (await this.taxMap()).size;
+  }
+
+  // Users live in Supabase Auth only: the file store has none (login needs Supabase)
+  async getUserRole(_userId: string): Promise<UserRole | null> {
+    return null;
   }
 
   async clearTaxRecords(): Promise<void> {

@@ -8,7 +8,7 @@
  * the client never reaches storage (Supabase is called with the server key only).
  */
 
-import type { ChatMessage, ComparisonResult, EmployeeProfile, Rules, SupportTicket, VehicleLookupResult } from '../../shared/types.ts';
+import type { ChatMessage, ComparisonResult, EmployeeProfile, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 
 export interface SessionRecord {
   id: string;
@@ -58,6 +58,30 @@ export interface Repository {
   getTaxRecord(key: string): Promise<VehicleLookupResult | null>;
   countTaxRecords(): Promise<number>;
   clearTaxRecords(): Promise<void>;
+
+  /** Role from app_users; null = no row (the user may not use the app) */
+  getUserRole(userId: string): Promise<UserRole | null>;
+}
+
+/** Tokens from the identity provider; they go to the browser only as httpOnly cookies */
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  /** Seconds until the access token expires */
+  expiresIn: number;
+  user: { id: string; email: string };
+}
+
+export type AuthAttempt = { ok: true; tokens: AuthTokens } | { ok: false; reason: 'invalid' | 'rate_limited' };
+
+/** Identity provider (Supabase Auth). Network failures throw; wrong credentials do not. */
+export interface AuthGateway {
+  signInWithPassword(email: string, password: string): Promise<AuthAttempt>;
+  refresh(refreshToken: string): Promise<AuthAttempt>;
+  /** The user an access token belongs to; null when the token is invalid or expired */
+  getUser(accessToken: string): Promise<{ id: string; email: string } | null>;
+  /** Revokes the refresh token behind this access token (best effort) */
+  signOut(accessToken: string): Promise<void>;
 }
 
 export const toLookupResult = (r: TaxRecord): VehicleLookupResult => ({
