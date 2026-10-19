@@ -43,12 +43,13 @@ First read docs/AUDIT.md if it exists (gap report vs docs/SPEC.md).
 3-tier layout (2026-10-17):
 
 - `shared/types.ts`: types used by client and server (domain, chat, tickets, API shapes). Types only.
-- `server/index.ts`: entry (config → DAL → BL → API, then Vite in dev or `dist/` in production). `server/config.ts`: the only reader of server env vars; refuses to start in production without GEMINI_API_KEY, REP_ACCESS_TOKEN, ADMIN_ACCESS_TOKEN.
+- `server/index.ts`: entry (config → DAL → BL → API, then Vite in dev or `dist/` in production). `server/config.ts`: the only reader of server env vars; refuses to start in production without GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (login).
+- Auth (branch feat/auth): Supabase Auth email + password, tokens only in httpOnly cookies (`server/api/authCookies.ts`), role in `app_users`. `requireRole` in `app.ts`: /sessions, /payslip, /meta any user; /tickets rep+admin; /admin admin; /tickets/summary, /health, /auth public. Each session has `userId`; someone else's session is 404. Client screens per role: `SCREENS_BY_ROLE` in `src/ui/Header.tsx`. Without Supabase (dev) login is off and everything is open.
 - `server/api/`: API layer. `app.ts` (routing), `middleware.ts` (security headers, CORS, rate limits, Bearer tokens, errors), `validate.ts` (every body/param), `routes/` sessions, tickets, admin, payslip.
 - `server/bl/`: business logic. `engine/` (pure; `types.ts` re-exports shared), `agent/` (loop, tools, guard, llm with an injected transport), `llm/gemini.ts` (model list, cooldown, time budget), `services/` session, ticket, admin, repAnswer, calibration, taxCsv.
 - `server/dal/`: `Repository` interface; `supabaseRepository.ts` (REST, service role key), `fileRepository.ts` (JSON in DATA_DIR, dev / single instance).
 - `server/data/`: strauss-rules.json, catalog.json, occupations.json, employees.json, tax-seed.json, aliases.
-- `src/`: client only. `api/client.ts` (all calls; session id in localStorage, rep/admin codes in sessionStorage), `ui/` (Tailwind) incl. `AccessGate.tsx`.
+- `src/`: client only. `api/client.ts` (all calls; session id in localStorage; on 401 renews via GET /api/auth/me and retries once, then shows login), `ui/` (Tailwind) incl. `AccessGate.tsx` (login form).
 - `tests/*.test.ts`, `tests/*.check.ts`, `supabase/schema.sql` (RLS on, no anon access), `Dockerfile`, `data/raw/` (rules, catalog.xlsx, vehicles.csv)
 - Branches: `main`, `agent`, `styling`, `refactor/3-tier`. Commit format: `type(branch-name): summary`, body with `### What`, `### Why`, `### How`.
 - Plan and status: `docs/AUDIT.md`, `docs/TODO.md`, `guide-current.html`

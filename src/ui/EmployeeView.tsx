@@ -4,17 +4,15 @@
  */
 
 import {
+  ChevronUp,
   Edit3,
   Paperclip,
   RotateCcw,
   Send,
-  ToggleLeft,
-  ToggleRight,
   User,
-  Users,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import type { ChatMessage, ComparisonResult, EmployeeProfile, SampleEmployee, SessionState } from '../../shared/types.ts';
+import type { ChatMessage, ComparisonResult, EmployeeProfile, SessionState } from '../../shared/types.ts';
 import { api } from '../api/client.ts';
 import { AdvisorLogo, Pinwheel } from './CarDecor.tsx';
 import { ComparisonCard } from './ComparisonCard.tsx';
@@ -33,14 +31,6 @@ interface EmployeeViewProps {
   onThrottledChange?: (throttled: boolean) => void;
 }
 
-// Sample-question chips take turns through the Strauss pinwheel colors
-const CHIP_COLORS = [
-  'bg-brand-light border-brand/20 hover:bg-brand/15',
-  'bg-sky-light border-sky/30 hover:bg-sky/20',
-  'bg-lime-light border-green/25 hover:bg-lime/60',
-  'bg-orange-light border-orange/30 hover:bg-orange/20',
-];
-
 const systemNote = (content: string): ChatMessage => ({
   id: `local-${Date.now()}`,
   role: 'system',
@@ -54,27 +44,41 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
   const [profile, setProfile] = useState<EmployeeProfile>(emptyProfile);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [lastComparison, setLastComparison] = useState<ComparisonResult | null>(null);
-  const [sampleEmployees, setSampleEmployees] = useState<SampleEmployee[]>([]);
 
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   // What the agent is doing right now (shown in the typing indicator)
   const [agentStatus, setAgentStatus] = useState('');
 
-  // State: Toggle for rep participation demo mode
-  const [repParticipationMode, setRepParticipationMode] = useState(false);
-
   // State: Modals & Panels
   const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(true);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const profileCardRef = useRef<HTMLDivElement>(null);
+  // On lg+ screens the chat matches the open profile card's height, and keeps that height
+  // while the profile is closed so the chat never jumps
+  const [profileHeight, setProfileHeight] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const el = profileCardRef.current;
+    if (!el) return;
+    const wide = window.matchMedia('(min-width: 64rem)');
+    const update = () => setProfileHeight(wide.matches ? el.offsetHeight : undefined);
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    wide.addEventListener('change', update);
+    update();
+    return () => {
+      observer.disconnect();
+      wide.removeEventListener('change', update);
+    };
+  }, [isProfileOpen]);
   // Latest values for timers and async callbacks that would otherwise see stale closures
   const busyRef = useRef(false);
-  const repModeRef = useRef(repParticipationMode);
   const lastMessageIdRef = useRef<string | undefined>(undefined);
   const profileSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  repModeRef.current = repParticipationMode;
 
   /** Shows the server's view of the conversation */
   const applyState = (s: SessionState) => {
@@ -90,7 +94,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     setMessages((prev) => [...prev, systemNote(`שגיאה: ${message}`)]);
   };
 
-  /** Runs one server call at a time (a message, a sample load, a reset) */
+  /** Runs one server call at a time (a message or a reset) */
   const runExclusive = async (fn: () => Promise<void>): Promise<void> => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -103,10 +107,9 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     }
   };
 
-  // Load this browser's conversation and the sample employees on mount
+  // Load this browser's conversation on mount
   useEffect(() => {
     api.sessions.current().then(applyState).catch(showError);
-    api.meta().then((m) => setSampleEmployees(m.sampleEmployees)).catch(() => undefined);
   }, []);
 
   // Rep answers arrive through the server: poll while idle and show new messages
@@ -115,7 +118,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     const timer = setInterval(async () => {
       if (busyRef.current) return;
       try {
-        const s = await api.sessions.sync(sessionId, repModeRef.current);
+        const s = await api.sessions.sync(sessionId, false);
         if (busyRef.current) return;
         if (s.messages[s.messages.length - 1]?.id !== lastMessageIdRef.current) applyState(s);
       } catch {
@@ -125,9 +128,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     return () => clearInterval(timer);
   }, [sessionId]);
 
-  // Scroll to bottom on new messages
+  // Keep the conversation scrolled internally; scrollIntoView also moves the page.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages, isTyping]);
 
   /** One agent turn on the server; the status line follows what the agent is doing */
@@ -137,7 +141,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     setAgentStatus('');
     setIsTyping(true);
     try {
-      const s = await api.sessions.sendMessage(id, text, repModeRef.current, (event) => {
+      const s = await api.sessions.sendMessage(id, text, false, (event) => {
         if (event.type === 'status') setAgentStatus(event.text);
         else if (event.type === 'throttled') onThrottledChange?.(event.on);
       });
@@ -155,13 +159,6 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     if (!textToSend) setInputValue('');
     await runExclusive(() => sendToAgent(text, sessionId));
   };
-
-  // Helper to load sample employee
-  const handleLoadSampleEmployee = (empId: string) =>
-    runExclusive(async () => {
-      if (!sessionId) return;
-      applyState(await api.sessions.loadSample(sessionId, empId));
-    });
 
   // Reset conversation: a new conversation starts with an empty profile (no data carried over)
   const handleNewConversation = () =>
@@ -187,123 +184,27 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     }, PROFILE_SAVE_DELAY_MS);
   };
 
-  // Sample questions chips
-  const sampleChips = [
-    {
-      label: 'קורולה קרוס ← Atto 3 חשמלי',
-      empId: 'E-001',
-      text: 'אם אעבור מהקורולה קרוס ל-BYD Atto 3 החשמלי - כמה זה ישנה לי בנטו?',
-    },
-    {
-      label: '5 ילדים: מעבר לקרניבל',
-      empId: 'E-002',
-      text: 'יש לי 5 ילדים. אם אקח קרניבל במסלול ברוכת ילדים - מה יקרה לנטו?',
-    },
-    {
-      label: 'אחזקת רכב ← MG4 חשמלי',
-      empId: 'E-003',
-      text: 'היום אני מקבלת אחזקת רכב. אם אקח MG4 חשמלי - כמה אפסיד או ארוויח בנטו?',
-    },
-    {
-      label: 'טוסון ← EV3 חשמלי',
-      empId: 'E-004',
-      text: 'אם אחליף את הטוסון ב-EV3 - מה ההפרש בנטו?',
-    },
-    {
-      label: 'מאזדה 3 ← ויתור על רכב',
-      empId: 'E-005',
-      text: 'אם אוותר על הרכב ואקבל אחזקה - כמה אקבל בנטו?',
-    },
-    {
-      label: 'אוקטביה ← טסלה מודל 3',
-      empId: 'E-006',
-      text: 'אם אעבור מהאוקטביה לטסלה מודל 3 - מה יקרה לנטו?',
-    },
-    {
-      label: 'עובדת קבוצה ב׳ שמוותרת על הרכב',
-      empId: 'E-GEN-B',
-      text: 'אני מהנדסת תהליך מקבוצה ב עם שכר 15,000 ₪. אם אוותר על הנירו ואקבל אחזקת רכב - מה יקרה לנטו שלי?',
-    },
-  ];
+  // Grid placement. Without a comparison the chat is centered and the profile sits at the side;
+  // a closed profile shrinks to a round icon and gives its width to the calculations.
+  const chatCols = [
+    'lg:col-span-8',
+    isProfileOpen ? '' : 'lg:col-start-3',
+    lastComparison ? 'xl:col-span-6 xl:col-start-auto' : 'xl:col-span-12 xl:col-start-7',
+  ].join(' ');
+  const calcCols = isProfileOpen ? 'xl:col-span-11' : 'xl:col-span-16';
+  const profileCols = isProfileOpen
+    ? `lg:col-span-4 ${lastComparison ? 'xl:col-span-7' : 'xl:col-span-6 xl:col-start-19'}`
+    : `lg:col-span-2 lg:col-start-11 ${lastComparison ? 'xl:col-span-2 xl:col-start-auto' : 'xl:col-span-2 xl:col-start-23'}`;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Demo helper bar */}
-      <div className="bg-white p-4 rounded-xl border border-line border-t-[3px] border-t-brand mb-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          {/* Preset employee picker */}
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-brand-dark" />
-              <span>טען עובד לדוגמה:</span>
-            </span>
-            <select
-              onChange={(e) => (e.target.value ? handleLoadSampleEmployee(e.target.value) : handleNewConversation())}
-              value={profile.id || ''}
-              className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand"
-            >
-              <option value="">ללא: שיחה חדשה עם נתונים אמיתיים</option>
-              {sampleEmployees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.name} ({emp.occupation} · קבוצה {emp.group})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Toggle "השתתפות ברכב החדש" */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-600 font-medium">השתתפות ברכב חדש:</span>
-            <button
-              onClick={() => setRepParticipationMode(!repParticipationMode)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors ${
-                repParticipationMode
-                  ? 'bg-warning/15 text-warning border border-warning/30'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {repParticipationMode ? (
-                <>
-                  <ToggleRight className="w-4 h-4 text-warning" />
-                  <span>אימות נציג (סימולציית פנייה)</span>
-                </>
-              ) : (
-                <>
-                  <ToggleLeft className="w-4 h-4 text-slate-500" />
-                  <span>לפי ברירת מחדל בקטלוג</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Quick sample question chips */}
-        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted ml-1">🚦 שאלות מפתח:</span>
-          {sampleChips.map((chip, idx) => (
-            <button
-              key={idx}
-              onClick={() =>
-                runExclusive(async () => {
-                  if (!sessionId) return;
-                  applyState(await api.sessions.loadSample(sessionId, chip.empId));
-                  await sendToAgent(chip.text, sessionId);
-                })
-              }
-              className={`text-xs px-3 py-1.5 rounded-full text-ink border transition-colors ${CHIP_COLORS[idx % CHIP_COLORS.length]}`}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Grid: Chat + Profile Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Chat & Comparison Card (8 cols) */}
-        <div className="lg:col-span-8 flex flex-col space-y-4">
-          {/* Chat Container */}
-          <div className="bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs flex flex-col h-[520px]">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main Grid. xl: chat | calculations | profile. lg: chat | profile, calculations below. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 xl:grid-cols-24 gap-8 items-start">
+        {/* Chat */}
+        <div className={`${chatCols} lg:order-1 xl:sticky xl:top-24`}>
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs flex flex-col h-[min(62vh,680px)] min-h-[360px] lg:h-[calc(100vh-15rem)] lg:max-h-[820px]"
+            style={profileHeight ? { height: profileHeight, maxHeight: 'none' } : undefined}
+          >
             {/* Chat Header */}
             <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -341,67 +242,68 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3.5 text-sm">
-              {messages.map((msg) => {
-                const isUser = msg.role === 'user';
-                const isRep = msg.role === 'rep';
-                const isSystem = msg.role === 'system';
+            <div ref={messagesContainerRef} className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto flex flex-col text-sm">
+              {/* mt-auto keeps messages at the bottom; empty space stays above them */}
+              <div className="mt-auto space-y-3">
+                {messages.map((msg) => {
+                  const isUser = msg.role === 'user';
+                  const isRep = msg.role === 'rep';
+                  const isSystem = msg.role === 'system';
 
-                if (isSystem) {
+                  if (isSystem) {
+                    return (
+                      <div
+                        key={msg.id}
+                        className="p-2.5 rounded-lg bg-slate-100 text-xs text-slate-600 text-center mx-auto max-w-md border border-slate-200"
+                      >
+                        {msg.content}
+                      </div>
+                    );
+                  }
+
+                  if (isRep) {
+                    return (
+                      <div
+                        key={msg.id}
+                        className="p-3 rounded-xl bg-brand/10 border border-brand/20 text-xs sm:text-sm text-brand-dark font-medium"
+                      >
+                        {msg.content}
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={msg.id}
-                      className="p-2.5 rounded-lg bg-slate-100 text-xs text-slate-600 text-center mx-auto max-w-md border border-slate-200"
+                      className={`flex ${isUser ? 'justify-start' : 'justify-end'}`}
                     >
-                      {msg.content}
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-4 py-3 leading-relaxed ${
+                          isUser
+                            ? 'bg-brand text-white rounded-br-xs'
+                            : 'bg-white text-ink border border-line rounded-bl-xs shadow-xs'
+                        }`}
+                      >
+                        <p className="whitespace-pre-line">{msg.content}</p>
+                      </div>
                     </div>
                   );
-                }
+                })}
 
-                if (isRep) {
-                  return (
-                    <div
-                      key={msg.id}
-                      className="p-3 rounded-xl bg-brand/10 border border-brand/20 text-xs sm:text-sm text-brand-dark font-medium"
-                    >
-                      {msg.content}
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isUser ? 'justify-start' : 'justify-end'}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 leading-relaxed ${
-                        isUser
-                          ? 'bg-brand text-white rounded-br-xs'
-                          : 'bg-white text-ink border border-line rounded-bl-xs shadow-xs'
-                      }`}
-                    >
-                      <p className="whitespace-pre-line">{msg.content}</p>
+                {/* Typing indicator */}
+                {isTyping && (
+                  <div className="flex justify-end">
+                    <div className="bg-white border border-line shadow-xs rounded-2xl px-4 py-2.5 rounded-bl-xs flex items-center gap-2 text-muted text-xs font-medium">
+                      <Pinwheel className="w-6 h-6" spin />
+                      <span>{agentStatus || 'מחשב נתונים במנוע השכר...'}</span>
                     </div>
                   </div>
-                );
-              })}
-
-              {/* Typing indicator */}
-              {isTyping && (
-                <div className="flex justify-end">
-                  <div className="bg-white border border-line shadow-xs rounded-2xl px-4 py-2.5 rounded-bl-xs flex items-center gap-2 text-muted text-xs font-medium">
-                    <Pinwheel className="w-6 h-6" spin />
-                    <span>{agentStatus || 'מחשב נתונים במנוע השכר...'}</span>
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
+                )}
+              </div>
             </div>
 
             {/* Input Bar */}
-            <div className="p-3 border-t border-slate-100 bg-white">
+            <div className="p-3 border-t border-slate-100">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -437,9 +339,11 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
               </form>
             </div>
           </div>
+        </div>
 
-          {/* Comparison Card (Displayed directly below chat when available) */}
-          {lastComparison && (
+        {/* Calculations */}
+        {lastComparison && (
+          <div className={`lg:col-span-12 lg:order-3 ${calcCols} xl:order-2 min-w-0`}>
             <ComparisonCard
               comparison={lastComparison}
               onSelectCarAgain={() => handleSendMessage('אילו רכבים נוספים אני יכול לבחור בקבוצה שלי?')}
@@ -452,13 +356,38 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
               }
               onShowRankedOptions={() => handleSendMessage('איזה רכב בקטלוג הכי משתלם לי מבחינת הנטו?')}
             />
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Right Column: Collected Profile Panel (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-line border-t-[3px] border-t-green shadow-xs p-5 sticky top-24">
+        {/* Profile panel */}
+        <div className={`${profileCols} lg:order-2 xl:order-3 xl:sticky xl:top-24`}>
+          {!isProfileOpen ? (
+            // Closed: a round profile icon at the side; clicking it opens the card
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsProfileOpen(true)}
+                aria-expanded={false}
+                aria-label="הצגת הפרופיל"
+                title="הצגת הפרופיל"
+                className="w-14 h-14 rounded-full bg-white border border-line shadow-xs hover:shadow-sm transition flex items-center justify-center"
+              >
+                <span className="w-10 h-10 rounded-full bg-lime-light text-success flex items-center justify-center">
+                  <User className="w-5 h-5" />
+                </span>
+              </button>
+            </div>
+          ) : (
+          <div ref={profileCardRef} className="bg-white rounded-2xl border border-line border-t-[3px] border-t-green shadow-xs p-5">
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
-            <div className="flex items-center gap-2">
+            {/* Clicking the title closes the card to a round icon */}
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(false)}
+              aria-expanded={true}
+              className="flex items-center gap-2 text-right"
+              title="הסתרת הפרופיל"
+            >
               <div className="w-8 h-8 rounded-lg bg-lime-light text-success flex items-center justify-center">
                 <User className="w-4 h-4" />
               </div>
@@ -466,7 +395,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
                 <h3 className="text-sm font-bold text-ink">פרופיל שנאסף</h3>
                 <span className="text-[11px] text-slate-500">נתוני שכר וזכאות נוכחיים</span>
               </div>
-            </div>
+              <ChevronUp className="w-4 h-4 text-slate-500" />
+            </button>
 
             <button
               onClick={() => setIsEditingProfile(!isEditingProfile)}
@@ -572,6 +502,8 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
           <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400 text-center">
             שינוי נתון מחשב מחדש את תוצאת ההשוואה באופן מיידי
           </div>
+          </div>
+          )}
         </div>
       </div>
 
@@ -589,3 +521,4 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
     </div>
   );
 };
+

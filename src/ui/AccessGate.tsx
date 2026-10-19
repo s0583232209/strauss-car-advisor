@@ -5,33 +5,39 @@
 
 import { Lock } from 'lucide-react';
 import React, { useState } from 'react';
-import { accessToken, Role } from '../api/client.ts';
+import type { AuthUser } from '../../shared/types.ts';
+import { api } from '../api/client.ts';
 
 interface AccessGateProps {
-  role: Role;
-  /** Shown after a wrong code */
-  error?: string | null;
-  onUnlocked: () => void;
+  onLoggedIn: (user: AuthUser) => void;
 }
 
-const TITLES: Record<Role, string> = {
-  rep: 'כניסת נציג שכר',
-  admin: 'כניסת מנהל מערכת',
-};
+/** Email and password login; the server checks them with Supabase Auth and sets httpOnly cookies */
+export const AccessGate: React.FC<AccessGateProps> = ({ onLoggedIn }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-/** Asks for the rep/admin access code; the server checks it on every request */
-export const AccessGate: React.FC<AccessGateProps> = ({ role, error, onUnlocked }) => {
-  const [code, setCode] = useState('');
+  const canSubmit = email.trim() !== '' && password !== '' && !busy;
 
   return (
     <div className="max-w-md mx-auto px-4 py-16">
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (!code.trim()) return;
-          accessToken.set(role, code.trim());
-          setCode('');
-          onUnlocked();
+          if (!canSubmit) return;
+          setBusy(true);
+          setError(null);
+          try {
+            const user = await api.auth.login(email.trim(), password);
+            setPassword('');
+            onLoggedIn(user);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'הכניסה נכשלה');
+          } finally {
+            setBusy(false);
+          }
         }}
         className="bg-white rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs p-6 space-y-4"
       >
@@ -40,25 +46,45 @@ export const AccessGate: React.FC<AccessGateProps> = ({ role, error, onUnlocked 
             <Lock className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-ink">{TITLES[role]}</h2>
-            <p className="text-xs text-slate-500">המסך מכיל נתוני שכר: נדרש קוד גישה</p>
+            <h2 className="text-base font-bold text-ink">כניסה למערכת</h2>
+            <p className="text-xs text-slate-500">המערכת מכילה נתוני שכר: נדרשת כניסה עם אימייל וסיסמה</p>
           </div>
         </div>
-        <input
-          type="password"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="קוד גישה"
-          autoComplete="current-password"
-          className="w-full px-4 py-2.5 rounded-lg border border-line bg-surface/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-        />
-        {error && <p className="text-xs text-danger font-medium">{error}</p>}
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-slate-600">אימייל</span>
+          <input
+            type="email"
+            dir="ltr"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            required
+            className="w-full px-4 py-2.5 rounded-lg border border-line bg-surface/60 text-sm text-left focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-slate-600">סיסמה</span>
+          <input
+            type="password"
+            dir="ltr"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+            className="w-full px-4 py-2.5 rounded-lg border border-line bg-surface/60 text-sm text-left focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+          />
+        </label>
+        {error && (
+          <p role="alert" className="text-xs text-danger font-medium">
+            {error}
+          </p>
+        )}
         <button
           type="submit"
-          disabled={!code.trim()}
+          disabled={!canSubmit}
           className="w-full px-4 py-2.5 rounded-lg bg-brand text-white hover:bg-brand-dark disabled:opacity-40 transition-colors text-sm font-semibold"
         >
-          כניסה
+          {busy ? 'נכנסים...' : 'כניסה'}
         </button>
       </form>
     </div>

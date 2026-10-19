@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/** Cross-cutting API concerns: security headers, CORS, rate limits, role tokens, errors */
+/** Cross-cutting API concerns: security headers, CORS, rate limits, errors (login: authCookies.ts) */
 
-import { timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 /** Wraps an async route so a rejected promise reaches the error handler */
@@ -99,26 +98,6 @@ export function rateLimit(options: { windowMs: number; max: number; name: string
     if (h.count > options.max) {
       res.setHeader('Retry-After', String(Math.ceil((h.resetAt - now) / 1000)));
       res.status(429).json({ error: 'יותר מדי בקשות. נסו שוב בעוד רגע.' });
-      return;
-    }
-    next();
-  };
-}
-
-function sameSecret(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
-}
-
-/** Requires "Authorization: Bearer <token>" when a token is configured (always in production) */
-export function requireToken(token: string | undefined): RequestHandler {
-  return (req, res, next) => {
-    if (!token) return next();
-    const header = req.headers.authorization ?? '';
-    const given = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (!given || !sameSecret(given, token)) {
-      res.status(401).json({ error: 'נדרש קוד גישה' });
       return;
     }
     next();

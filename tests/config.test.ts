@@ -4,24 +4,25 @@ import { ConfigError, loadConfig } from '../server/config.ts';
 const prod = {
   NODE_ENV: 'production',
   GEMINI_API_KEY: 'k',
-  REP_ACCESS_TOKEN: 'r'.repeat(20),
-  ADMIN_ACCESS_TOKEN: 'a'.repeat(20),
+  SUPABASE_URL: 'https://x.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 's',
 };
 
 describe('server configuration', () => {
-  it('production refuses to start without the rep/admin tokens or the model key', () => {
+  it('production refuses to start without Supabase (login) or the model key', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(ConfigError);
-    expect(() => loadConfig({ ...prod, REP_ACCESS_TOKEN: undefined })).toThrow(/REP_ACCESS_TOKEN/);
+    expect(() => loadConfig({ ...prod, SUPABASE_URL: undefined, SUPABASE_SERVICE_ROLE_KEY: undefined })).toThrow(/SUPABASE_URL/);
     expect(() => loadConfig({ ...prod, GEMINI_API_KEY: undefined })).toThrow(/GEMINI_API_KEY/);
   });
 
-  it('short tokens are refused', () => {
-    expect(() => loadConfig({ ...prod, ADMIN_ACCESS_TOKEN: 'short' })).toThrow(/at least 16/);
+  it('the old shared access codes only produce a warning', () => {
+    const { warnings } = loadConfig({ ...prod, ADMIN_ACCESS_TOKEN: 'short' });
+    expect(warnings.join('\n')).toMatch(/ADMIN_ACCESS_TOKEN is no longer used/);
   });
 
   it('Supabase needs both the URL and the service key', () => {
-    expect(() => loadConfig({ ...prod, SUPABASE_URL: 'https://x.supabase.co' })).toThrow(/SUPABASE/);
-    const { config } = loadConfig({ ...prod, SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 's' });
+    expect(() => loadConfig({ ...prod, SUPABASE_SERVICE_ROLE_KEY: undefined })).toThrow(/SUPABASE/);
+    const { config } = loadConfig(prod);
     expect(config.supabaseServiceKey).toBe('s');
   });
 

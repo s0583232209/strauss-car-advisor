@@ -24,8 +24,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import type { AdminOverview, CalibrationSummary, Rules, VehicleLookupResult } from '../../shared/types.ts';
-import { accessToken, api, ApiError } from '../api/client.ts';
-import { AccessGate } from './AccessGate.tsx';
+import { api, ApiError } from '../api/client.ts';
 
 export const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -34,8 +33,6 @@ export const AdminView: React.FC = () => {
 
   // Reference data, rules and record count from the server
   const [overview, setOverview] = useState<AdminOverview | null>(null);
-  const [locked, setLocked] = useState(false);
-  const [lockError, setLockError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Calibration test runner state
@@ -60,14 +57,9 @@ export const AdminView: React.FC = () => {
   const [lookupResult, setLookupResult] = useState<VehicleLookupResult | null>(null);
   const [lookupSearched, setLookupSearched] = useState(false);
 
-  /** A 401 shows the access-code screen; anything else is shown above the tabs */
+  /** A 401 already sent the app back to the login screen; anything else is shown above the tabs */
   const handleApiError = (err: unknown) => {
-    if (err instanceof ApiError && err.status === 401) {
-      setLockError(accessToken.get('admin') ? 'קוד הגישה שגוי' : null);
-      accessToken.set('admin', null);
-      setLocked(true);
-      return;
-    }
+    if (err instanceof ApiError && err.status === 401) return;
     setLoadError(err instanceof Error ? err.message : 'שגיאה בתקשורת עם השרת');
   };
 
@@ -89,10 +81,10 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  // Load data and run tests on mount (and after unlocking)
+  // Load data and run tests on mount
   useEffect(() => {
-    if (!locked) loadOverview();
-  }, [locked]);
+    loadOverview();
+  }, []);
 
   const runTests = async () => {
     setIsRunningTests(true);
@@ -177,19 +169,6 @@ export const AdminView: React.FC = () => {
       handleApiError(err);
     }
   };
-
-  if (locked) {
-    return (
-      <AccessGate
-        role="admin"
-        error={lockError}
-        onUnlocked={() => {
-          setLockError(null);
-          setLocked(false);
-        }}
-      />
-    );
-  }
 
   if (!overview || !currentRules) {
     return (

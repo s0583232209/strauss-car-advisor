@@ -111,6 +111,17 @@ export function profileUpdateBody(body: unknown): { updates: Partial<EmployeePro
   return { updates: updates as Partial<EmployeeProfile>, source: source as 'manual' | 'payslip' };
 }
 
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export function loginBody(body: unknown): { email: string; password: string } {
+  const b = object(body, ['email', 'password'], 'כניסה');
+  const email = text(b.email, 'email', 254)!.toLowerCase();
+  if (!EMAIL.test(email)) fail('email: כתובת לא תקינה');
+  // Passwords are not trimmed: spaces may be part of them
+  if (typeof b.password !== 'string' || !b.password) fail('password: שדה חובה');
+  if ((b.password as string).length > 128) fail('password: ארוך מדי (עד 128 תווים)');
+  return { email, password: b.password as string };
+}
+
 export function ticketAnswerBody(body: unknown): { status: 'answered' | 'closed'; text?: string; value?: number; effectiveFrom?: string } {
   const b = object(body, ['status', 'text', 'value', 'effectiveFrom'], 'תשובת נציג');
   if (b.status !== 'answered' && b.status !== 'closed') fail('status: ערך לא תקין');

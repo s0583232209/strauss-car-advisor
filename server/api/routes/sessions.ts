@@ -4,12 +4,13 @@
  */
 
 /**
- * Employee conversation API. A session id is a random UUID held by the employee's browser:
- * knowing it is what gives access to that conversation.
+ * Employee conversation API (any logged-in user, checked in app.ts). Each conversation belongs to
+ * the user who created it; anyone else gets 404 for it. Without login (development) the random
+ * session id held by the browser is what gives access, as before.
  */
 
-import { Router } from 'express';
-import type { ChatStreamEvent } from '../../../shared/types.ts';
+import { Router, type Response } from 'express';
+import type { AuthUser, ChatStreamEvent } from '../../../shared/types.ts';
 import type { SessionService } from '../../bl/services/sessionService.ts';
 import { asyncHandler, rateLimit } from '../middleware.ts';
 import { messageBody, profileUpdateBody, sampleBody, sessionId, syncBody } from '../validate.ts';
@@ -20,8 +21,28 @@ export function sessionsRouter(sessions: SessionService): Router {
   const messageLimit = rateLimit({ name: 'messages', windowMs: 60_000, max: 30 });
   const createLimit = rateLimit({ name: 'session-create', windowMs: 60_000, max: 20 });
 
+  // Set by requireRole; undefined only when the server has no login
+  const userId = (res: Response) => (res.locals.user as AuthUser | undefined)?.id;
+
+  // Every /:id route below: the conversation must exist and belong to the logged-in user
+  router.param('id', (req, res, next, raw) => {
+    Promise.resolve()
+      .then(() => sessions.assertOwner(sessionId(raw), userId(res)))
+      .then(() => next(), next);
+  });
+
   router.post('/', createLimit, asyncHandler(async (_req, res) => {
-    res.status(201).json(await sessions.create());
+    res.status(201).json(await sessions.create(userId(res)));
+  }));
+
+  // The user's latest conversation, so another device continues it (404: none yet, or no login)
+  router.get('/mine', asyncHandler(async (_req, res) => {
+    const id = userId(res);
+    if (!id) {
+      res.status(404).json({ error: 'לא נמצאה שיחה' });
+      return;
+    }
+    res.json(await sessions.latestFor(id));
   }));
 
   router.get('/:id', asyncHandler(async (req, res) => {

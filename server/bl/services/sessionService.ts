@@ -178,9 +178,11 @@ export function createSessionService(repo: Repository, now: () => number = Date.
   }
 
   return {
-    async create(): Promise<SessionState> {
+    /** userId = the logged-in owner; undefined only without login (development) */
+    async create(userId?: string): Promise<SessionState> {
       const s: SessionRecord = {
         id: randomUUID(),
+        ...(userId ? { userId } : {}),
         profile: emptyProfile(),
         lastComparison: null,
         messages: [],
@@ -193,6 +195,22 @@ export function createSessionService(repo: Repository, now: () => number = Date.
     },
 
     async get(id: string): Promise<SessionState> {
+      return toState(await load(id));
+    },
+
+    /**
+     * Someone else's conversation looks like a missing one (404), so ids cannot be probed.
+     * userId undefined = no login (development): every conversation is open, as before.
+     */
+    async assertOwner(id: string, userId: string | undefined): Promise<void> {
+      const s = await load(id);
+      if (userId !== undefined && s.userId !== userId) throw new NotFoundError('session not found');
+    },
+
+    /** The user's latest conversation, to continue it on another device */
+    async latestFor(userId: string): Promise<SessionState> {
+      const id = await repo.findLatestSessionId(userId);
+      if (!id) throw new NotFoundError('session not found');
       return toState(await load(id));
     },
 

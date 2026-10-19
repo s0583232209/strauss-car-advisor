@@ -24,15 +24,11 @@ export interface ServerConfig {
   supabaseServiceKey?: string;
   dataDir: string;
   staticDir: string;
-  /** Bearer tokens for the rep and admin APIs; unset = open (development only) */
-  repAccessToken?: string;
-  adminAccessToken?: string;
 }
 
 export class ConfigError extends Error {}
 
 const list = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-const MIN_TOKEN_LENGTH = 16;
 
 function parseTrustProxy(v: string | undefined): string | number | boolean {
   if (v === undefined || v === '') return false;
@@ -69,8 +65,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Serv
     supabaseServiceKey: env.SUPABASE_SERVICE_ROLE_KEY || undefined,
     dataDir: path.resolve(env.DATA_DIR || '.data'),
     staticDir: path.resolve(env.STATIC_DIR || 'dist'),
-    repAccessToken: env.REP_ACCESS_TOKEN || undefined,
-    adminAccessToken: env.ADMIN_ACCESS_TOKEN || undefined,
   };
 
   if (!config.gemini.apiKey) (isProduction ? errors : warnings).push('GEMINI_API_KEY is not set: the agent cannot answer');
@@ -78,16 +72,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Serv
     errors.push('Set both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or neither');
   }
   if (!config.supabaseUrl) {
-    warnings.push(`No Supabase: data is kept in local files under ${config.dataDir} (single instance, needs a persistent disk)`);
+    // Login is Supabase Auth: without it every screen is open, which only development may allow
+    if (isProduction) errors.push('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production (login protects employee salary data)');
+    else warnings.push(`No Supabase: no login, every screen is open, and data is kept in local files under ${config.dataDir} (development only)`);
   }
 
-  for (const [name, token] of [['REP_ACCESS_TOKEN', config.repAccessToken], ['ADMIN_ACCESS_TOKEN', config.adminAccessToken]] as const) {
-    if (!token) {
-      if (isProduction) errors.push(`${name} is required in production (protects employee salary data)`);
-      else warnings.push(`${name} is not set: that API is open (development only)`);
-    } else if (token.length < MIN_TOKEN_LENGTH) {
-      errors.push(`${name} must be at least ${MIN_TOKEN_LENGTH} characters`);
-    }
+  // Shared access codes were replaced by user login (Supabase Auth)
+  for (const legacy of ['REP_ACCESS_TOKEN', 'ADMIN_ACCESS_TOKEN']) {
+    if (env[legacy]) warnings.push(`${legacy} is no longer used: users log in with Supabase Auth; delete it`);
   }
 
   // Old client-side names: Vite would put these into the browser bundle if any client code read them

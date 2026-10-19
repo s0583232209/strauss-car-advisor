@@ -3,19 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/** Admin API (Bearer ADMIN_ACCESS_TOKEN): rules, reference data, Tax Authority file, calibration */
+/** Admin API (role admin, checked in app.ts): rules, reference data, Tax Authority file, calibration */
 
 import express, { Router } from 'express';
 import type { AdminService } from '../../bl/services/adminService.ts';
-import { asyncHandler, HttpError, rateLimit, requireToken } from '../middleware.ts';
+import { asyncHandler, HttpError, rateLimit } from '../middleware.ts';
 import { lookupQuery, rulesBody } from '../validate.ts';
 
 // The full Tax Authority file is tens of megabytes
 const TAX_FILE_LIMIT = '80mb';
 
-export function adminRouter(admin: AdminService, adminAccessToken: string | undefined): Router {
+export function adminRouter(admin: AdminService): Router {
   const router = Router();
-  router.use(requireToken(adminAccessToken));
 
   router.get('/overview', asyncHandler(async (_req, res) => {
     res.json(await admin.overview());

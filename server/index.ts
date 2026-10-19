@@ -15,10 +15,11 @@ import { createApp } from './api/app.ts';
 import { configureLlm } from './bl/agent/llm.ts';
 import { createGemini } from './bl/llm/gemini.ts';
 import { createAdminService } from './bl/services/adminService.ts';
+import { createAuthService } from './bl/services/authService.ts';
 import { createSessionService } from './bl/services/sessionService.ts';
 import { createTicketService } from './bl/services/ticketService.ts';
 import { ConfigError, loadConfig } from './config.ts';
-import { createRepository } from './dal/index.ts';
+import { createAuthGateway, createRepository } from './dal/index.ts';
 
 dotenv.config({ quiet: true });
 
@@ -42,6 +43,7 @@ async function main() {
     supabaseServiceKey: config.supabaseServiceKey,
     dataDir: config.dataDir,
   });
+  const authGateway = createAuthGateway(config);
 
   // Business Logic Layer
   const gemini = createGemini(config.gemini);
@@ -50,6 +52,7 @@ async function main() {
   await admin.init();
   const sessions = createSessionService(repo);
   const tickets = createTicketService(repo);
+  const auth = authGateway ? createAuthService(authGateway, repo) : null;
 
   // API Layer
   const app = createApp({
@@ -57,6 +60,7 @@ async function main() {
     sessions,
     tickets,
     admin,
+    auth,
     extractPayslip: gemini.extractPayslip,
     healthDetails: () => ({ ...gemini.status(), storage: repo.kind }),
   });

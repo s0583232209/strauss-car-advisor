@@ -11,7 +11,7 @@
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ChatMessage, Rules, SupportTicket, VehicleLookupResult } from '../../shared/types.ts';
+import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 import { Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 interface AppData {
@@ -75,6 +75,14 @@ export class FileRepository implements Repository {
   async getSession(id: string): Promise<SessionRecord | null> {
     const s = (await this.app()).sessions[id];
     return s ? structuredClone(s) : null;
+  }
+
+  async findLatestSessionId(userId: string): Promise<string | null> {
+    let latest: SessionRecord | null = null;
+    for (const s of Object.values((await this.app()).sessions)) {
+      if (s.userId === userId && (!latest || s.updatedAt > latest.updatedAt)) latest = s;
+    }
+    return latest?.id ?? null;
   }
 
   async saveSessionState(session: Omit<SessionRecord, 'messages'>): Promise<void> {
@@ -141,6 +149,11 @@ export class FileRepository implements Repository {
 
   async countTaxRecords(): Promise<number> {
     return (await this.taxMap()).size;
+  }
+
+  // Users live in Supabase Auth only: the file store has none (login needs Supabase)
+  async getUserRole(_userId: string): Promise<UserRole | null> {
+    return null;
   }
 
   async clearTaxRecords(): Promise<void> {

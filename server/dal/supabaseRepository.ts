@@ -10,7 +10,7 @@
  * Errors are thrown, never hidden behind a local fallback.
  */
 
-import type { ChatMessage, Rules, SupportTicket, VehicleLookupResult } from '../../shared/types.ts';
+import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 import { Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 const TAX_BATCH = 1000;
@@ -59,6 +59,7 @@ export class SupabaseRepository implements Repository {
     const messages = await this.rows<any>(`messages?session_id=eq.${enc}&order=created_at.asc,id.asc&select=*`);
     return {
       id: session.id,
+      ...(session.user_id ? { userId: session.user_id } : {}),
       profile: session.profile ?? {},
       lastComparison: session.last_comparison ?? null,
       pendingFields: session.pending_fields ?? undefined,
@@ -76,9 +77,15 @@ export class SupabaseRepository implements Repository {
     };
   }
 
+  async findLatestSessionId(userId: string): Promise<string | null> {
+    const [row] = await this.rows<{ id: string }>(`sessions?user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc&limit=1&select=id`);
+    return row?.id ?? null;
+  }
+
   async saveSessionState(s: Omit<SessionRecord, 'messages'>): Promise<void> {
     await this.upsert('sessions', {
       id: s.id,
+      user_id: s.userId ?? null,
       profile: s.profile,
       last_comparison: s.lastComparison,
       pending_fields: s.pendingFields ?? null,
@@ -216,5 +223,10 @@ export class SupabaseRepository implements Repository {
 
   async clearTaxRecords(): Promise<void> {
     await this.request('tax_records?key=not.is.null', { method: 'DELETE' });
+  }
+
+  async getUserRole(userId: string): Promise<UserRole | null> {
+    const [row] = await this.rows<{ role: UserRole }>(`app_users?user_id=eq.${encodeURIComponent(userId)}&select=role`);
+    return row?.role ?? null;
   }
 }

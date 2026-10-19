@@ -65,14 +65,50 @@ CREATE TABLE IF NOT EXISTS tax_records (
     source_row INTEGER
 );
 
--- 6. Lock everything down: server (service role) only
+-- 6. App users: role per Supabase Auth user. The role lives here, not in user_metadata
+-- (users can edit their own user_metadata). Promote with:
+--   UPDATE app_users SET role = 'rep' WHERE user_id = (SELECT id FROM auth.users WHERE email = '...');
+CREATE TABLE IF NOT EXISTS app_users (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('employee', 'rep', 'admin')) DEFAULT 'employee',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- Every new auth user starts as an employee
+CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  INSERT INTO public.app_users (user_id) VALUES (NEW.id) ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.handle_new_auth_user() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
+
+-- Users created before this script ran
+INSERT INTO app_users (user_id) SELECT id FROM auth.users ON CONFLICT (user_id) DO NOTHING;
+
+-- Conversation owner (NULL for conversations created before auth)
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, updated_at DESC);
+
+-- 7. Lock everything down: server (service role) only
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tax_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 
-REVOKE ALL ON sessions, messages, tickets, app_settings, tax_records FROM anon, authenticated;
+REVOKE ALL ON sessions, messages, tickets, app_settings, tax_records, app_users FROM anon, authenticated;
 
 -- The browser no longer subscribes to realtime changes (the server polls): remove the tables from
 -- the realtime publication if an older version of this script added them.

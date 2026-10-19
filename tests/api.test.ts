@@ -1,6 +1,7 @@
 /**
  * End-to-end through the API layer: real routes, real business services, a file repository in a
- * temporary folder, and a fake model (no network).
+ * temporary folder, a fake model and a fake Supabase Auth (no network).
+ * Requests run as a logged-in employee unless they pass their own Cookie header.
  */
 
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -13,12 +14,17 @@ import type { ChatStreamEvent, SessionState, SupportTicket } from '../shared/typ
 import { createApp } from '../server/api/app.ts';
 import { configureLlm } from '../server/bl/agent/llm.ts';
 import { createAdminService } from '../server/bl/services/adminService.ts';
+import { createAuthService } from '../server/bl/services/authService.ts';
 import { createSessionService } from '../server/bl/services/sessionService.ts';
 import { createTicketService } from '../server/bl/services/ticketService.ts';
 import { FileRepository } from '../server/dal/fileRepository.ts';
+import { FakeGateway, loginCookie, roleRepo } from './fakeAuth.ts';
 
-const REP_TOKEN = 'rep-token-for-tests-123';
-const ADMIN_TOKEN = 'admin-token-for-tests-456';
+/** Login cookies, set in beforeAll */
+let EMPLOYEE: string;
+let REP: string;
+let ADMIN: string;
+const NO_LOGIN = { Cookie: '' };
 
 let server: Server;
 let base: string;
@@ -37,16 +43,20 @@ beforeAll(async () => {
     },
   });
   const app = createApp({
-    config: { isProduction: false, trustProxy: false, allowedOrigins: ['https://allowed.example'], repAccessToken: REP_TOKEN, adminAccessToken: ADMIN_TOKEN },
+    config: { isProduction: false, trustProxy: false, allowedOrigins: ['https://allowed.example'] },
     sessions: createSessionService(repo),
     tickets: createTicketService(repo),
     admin: createAdminService(repo),
+    auth: createAuthService(new FakeGateway(), roleRepo),
     extractPayslip: async () => ({ base: { value: 15000, confidence: 'high', sourceQuote: 'שכר יסוד' }, injected: { value: 'x' } }),
   });
   await new Promise<void>((resolve) => {
     server = app.listen(0, '127.0.0.1', () => resolve());
   });
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
+  EMPLOYEE = await loginCookie(base, 'employee1@example.com');
+  REP = await loginCookie(base, 'rep@example.com');
+  ADMIN = await loginCookie(base, 'admin@example.com');
 });
 
 afterAll(() => {
@@ -57,7 +67,7 @@ afterAll(() => {
 const call = (method: string, p: string, body?: unknown, headers: Record<string, string> = {}) =>
   fetch(`${base}${p}`, {
     method,
-    headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
+    headers: { Cookie: EMPLOYEE, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
@@ -146,14 +156,16 @@ describe('rep flow: ask → answer → delivered to the chat', () => {
     const ticketId = asked.messages[asked.messages.length - 1].content.match(/TICK-\d+/)?.[0];
     expect(ticketId).toBeDefined();
 
-    // The queue is protected; the badge count is public
-    expect((await call('GET', '/tickets')).status).toBe(401);
-    expect((await call('GET', '/tickets', undefined, { Authorization: 'Bearer wrong-token-0000000' })).status).toBe(401);
-    expect((await (await call('GET', '/tickets/summary')).json()).open).toBeGreaterThanOrEqual(1);
-    const queue: SupportTicket[] = await (await call('GET', '/tickets', undefined, { Authorization: `Bearer ${REP_TOKEN}` })).json();
+    // The queue is for reps and admins; the badge count is public
+    expect((await call('GET', '/tickets', undefined, NO_LOGIN)).status).toBe(401);
+    expect((await call('GET', '/tickets')).status).toBe(403); // the employee's own login
+    expect((await (await call('GET', '/tickets/summary', undefined, NO_LOGIN)).json()).open).toBeGreaterThanOrEqual(1);
+    expect((await call('GET', '/tickets', undefined, { Cookie: ADMIN })).status).toBe(200);
+    const queue: SupportTicket[] = await (await call('GET', '/tickets', undefined, { Cookie: REP })).json();
     expect(queue.some((t) => t.id === ticketId)).toBe(true);
 
-    const answered = await call('POST', `/tickets/${ticketId}/answer`, { status: 'answered', text: 'אושר' }, { Authorization: `Bearer ${REP_TOKEN}` });
+    expect((await call('POST', `/tickets/${ticketId}/answer`, { status: 'answered', text: 'אושר' })).status).toBe(403);
+    const answered = await call('POST', `/tickets/${ticketId}/answer`, { status: 'answered', text: 'אושר' }, { Cookie: REP });
     expect(answered.status).toBe(200);
 
     const synced: SessionState = await (await call('POST', `/sessions/${s.id}/sync`, {})).json();
@@ -166,11 +178,52 @@ describe('rep flow: ask → answer → delivered to the chat', () => {
   });
 });
 
+describe('conversation ownership', () => {
+  it("another user gets 404 for every route of someone else's conversation", async () => {
+    const s = await newSession(); // employee1
+    const other = { Cookie: await loginCookie(base, 'employee2@example.com') };
+    for (const [method, p, body] of [
+      ['GET', `/sessions/${s.id}`, undefined],
+      ['POST', `/sessions/${s.id}/messages`, { text: 'שלום' }],
+      ['PATCH', `/sessions/${s.id}/profile`, { updates: { base: 1 }, source: 'manual' }],
+      ['POST', `/sessions/${s.id}/sample`, { employeeId: 'E-001' }],
+      ['POST', `/sessions/${s.id}/reset`, undefined],
+      ['POST', `/sessions/${s.id}/tickets`, undefined],
+      ['POST', `/sessions/${s.id}/sync`, {}],
+    ] as const) {
+      expect(`${method} ${p} ${(await call(method, p, body, other)).status}`).toBe(`${method} ${p} 404`);
+    }
+    // A rep or an admin does not read conversations through this API either
+    expect((await call('GET', `/sessions/${s.id}`, undefined, { Cookie: REP })).status).toBe(404);
+    expect((await call('GET', `/sessions/${s.id}`, undefined, { Cookie: ADMIN })).status).toBe(404);
+    // The owner still can, and nothing was changed by the refused calls
+    const own: SessionState = await (await call('GET', `/sessions/${s.id}`)).json();
+    expect(own.messages).toHaveLength(s.messages.length);
+    expect(own.profile).toEqual(s.profile);
+  });
+
+  it("GET /sessions/mine returns the user's latest conversation, on any device", async () => {
+    const fresh = { Cookie: await loginCookie(base, 'rep@example.com') };
+    expect((await call('GET', '/sessions/mine', undefined, fresh)).status).toBe(404); // the rep has none yet
+
+    await call('POST', '/sessions', undefined, fresh);
+    const latest: SessionState = await (await call('POST', '/sessions', undefined, fresh)).json();
+    const otherDevice = { Cookie: await loginCookie(base, 'rep@example.com') };
+    const res = await call('GET', '/sessions/mine', undefined, otherDevice);
+    expect(res.status).toBe(200);
+    expect((await res.json()).id).toBe(latest.id);
+    // Someone else's latest is never returned
+    const mine: SessionState = await (await call('GET', '/sessions/mine')).json();
+    expect(mine.id).not.toBe(latest.id);
+  });
+});
+
 describe('admin API', () => {
-  it('requires the admin token, and the rep token is not enough', async () => {
-    expect((await call('GET', '/admin/overview')).status).toBe(401);
-    expect((await call('GET', '/admin/overview', undefined, { Authorization: `Bearer ${REP_TOKEN}` })).status).toBe(401);
-    const res = await call('GET', '/admin/overview', undefined, { Authorization: `Bearer ${ADMIN_TOKEN}` });
+  it('requires an admin login; employee and rep logins are not enough', async () => {
+    expect((await call('GET', '/admin/overview', undefined, NO_LOGIN)).status).toBe(401);
+    expect((await call('GET', '/admin/overview')).status).toBe(403);
+    expect((await call('GET', '/admin/overview', undefined, { Cookie: REP })).status).toBe(403);
+    const res = await call('GET', '/admin/overview', undefined, { Cookie: ADMIN });
     expect(res.status).toBe(200);
     const overview = await res.json();
     expect(overview.catalog.length).toBeGreaterThan(0);
@@ -178,13 +231,13 @@ describe('admin API', () => {
   });
 
   it('refuses rules without the fields the engine needs', async () => {
-    const res = await call('PUT', '/admin/rules', { rules: { budgets: {} } }, { Authorization: `Bearer ${ADMIN_TOKEN}` });
+    const res = await call('PUT', '/admin/rules', { rules: { budgets: {} } }, { Cookie: ADMIN });
     expect(res.status).toBe(400);
   });
 
   it('imports a Tax Authority CSV on the server and looks a record up', async () => {
     const csv = 'שנת רישום,קוד סוג רכב,קוד תוצר,קוד דגם,כינוי מסחרי,שווי שימוש,מחיר מחירון\n2025,1,99999,00001,TEST CAR,1234,150000\n';
-    const auth = { Authorization: `Bearer ${ADMIN_TOKEN}` };
+    const auth = { Cookie: ADMIN };
     // The real file is windows-1255: Hebrew letters U+05D0–U+05EA are bytes 0xE0–0xFA
     const cp1255 = Uint8Array.from([...csv].map((ch) => (ch >= 'א' && ch <= 'ת' ? 0xe0 + ch.charCodeAt(0) - 0x5d0 : ch.charCodeAt(0))));
     const up = await fetch(`${base}/admin/tax-records`, { method: 'POST', headers: { 'Content-Type': 'text/csv', ...auth }, body: cp1255 });
@@ -210,6 +263,32 @@ describe('payslip API', () => {
 });
 
 describe('API security', () => {
+  it('every route but login, health and the ticket badge needs a login', async () => {
+    const s = await newSession();
+    for (const [method, p] of [
+      ['POST', '/sessions'],
+      ['GET', `/sessions/${s.id}`],
+      ['POST', `/sessions/${s.id}/messages`],
+      ['POST', '/payslip/extract'],
+      ['GET', '/meta'],
+      ['GET', '/tickets'],
+      ['GET', '/admin/overview'],
+    ]) {
+      expect(`${method} ${p} ${(await call(method, p, method === 'GET' ? undefined : {}, NO_LOGIN)).status}`).toBe(`${method} ${p} 401`);
+    }
+    expect((await call('GET', '/health', undefined, NO_LOGIN)).status).toBe(200);
+    expect((await call('GET', '/tickets/summary', undefined, NO_LOGIN)).status).toBe(200);
+    expect((await call('GET', '/auth/me', undefined, NO_LOGIN)).status).toBe(200);
+  });
+
+  it('a forged or logged-out cookie is refused', async () => {
+    expect((await call('GET', '/meta', undefined, { Cookie: 'yoetz_at=forged' })).status).toBe(401);
+    const cookie = await loginCookie(base, 'employee2@example.com');
+    expect((await call('GET', '/meta', undefined, { Cookie: cookie })).status).toBe(200);
+    expect((await call('POST', '/auth/logout', undefined, { Cookie: cookie })).status).toBe(204);
+    expect((await call('GET', '/meta', undefined, { Cookie: cookie })).status).toBe(401);
+  });
+
   it('refuses cross-origin requests from origins not on the list, allows listed ones', async () => {
     expect((await call('GET', '/meta', undefined, { Origin: 'https://evil.example' })).status).toBe(403);
     const ok = await call('GET', '/meta', undefined, { Origin: 'https://allowed.example' });
