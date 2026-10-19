@@ -31,7 +31,6 @@ Actual commands today:
 - `npx tsx tests/reference.check.ts`: independent SPEC 8.1 check. Part A must stay 12/12; part C lists known agent/scenario bugs, so TOTAL must only go up (77/83 on kickoff-fixes, 2026-10-14).
 - `tests/vehicles.check.ts` was deleted and not restored; its findings are in docs/AUDIT.md section 3.
 - `http://127.0.0.1:3000/api/health`: in development shows `hasGeminiKey`, the models with their cooldowns and the storage kind (production: status only).
-- In-app calibration: `server/bl/services/calibration.ts` (Admin tab via `POST /api/admin/calibration`; not a vitest file).
 
 ## Project origin
 
@@ -46,7 +45,7 @@ First read docs/AUDIT.md if it exists (gap report vs docs/SPEC.md).
 - `server/index.ts`: entry (config → DAL → BL → API, then Vite in dev or `dist/` in production). `server/config.ts`: the only reader of server env vars; refuses to start in production without GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (login).
 - Auth (branch feat/auth): Supabase Auth email + password, tokens only in httpOnly cookies (`server/api/authCookies.ts`), role in `app_users`. `requireRole` in `app.ts`: /sessions, /payslip, /meta any user; /tickets rep+admin; /admin admin; /tickets/summary, /health, /auth public. Each session has `userId`; someone else's session is 404. Client screens per role: `SCREENS_BY_ROLE` in `src/ui/Header.tsx`. Without Supabase (dev) login is off and everything is open.
 - `server/api/`: API layer. `app.ts` (routing), `middleware.ts` (security headers, CORS, rate limits, Bearer tokens, errors), `validate.ts` (every body/param), `routes/` sessions, tickets, admin, payslip.
-- `server/bl/`: business logic. `engine/` (pure; `types.ts` re-exports shared), `agent/` (loop, tools, guard, llm with an injected transport), `llm/gemini.ts` (model list, cooldown, time budget), `services/` session, ticket, admin, repAnswer, calibration, taxCsv.
+- `server/bl/`: business logic. `engine/` (pure; `types.ts` re-exports shared), `agent/` (loop, tools, guard, llm with an injected transport), `llm/gemini.ts` (model list, cooldown, time budget), `services/` session, ticket, admin, repAnswer, taxCsv.
 - `server/dal/`: `Repository` interface; `supabaseRepository.ts` (REST, service role key), `fileRepository.ts` (JSON in DATA_DIR, dev / single instance).
 - `server/data/`: strauss-rules.json, catalog.json, occupations.json, employees.json, tax-seed.json, aliases.
 - `src/`: client only. `api/client.ts` (all calls; session id in localStorage; on 401 renews via GET /api/auth/me and retries once, then shows login), `ui/` (Tailwind) incl. `AccessGate.tsx` (login form).

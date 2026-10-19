@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/** Admin API (role admin, checked in app.ts): rules, reference data, Tax Authority file, calibration */
+/** Admin API (role admin, checked in app.ts): rules, reference data, Tax Authority file */
 
 import express, { Router } from 'express';
 import type { AdminService } from '../../bl/services/adminService.ts';
@@ -26,10 +26,6 @@ export function adminRouter(admin: AdminService): Router {
 
   router.post('/rules/reset', asyncHandler(async (_req, res) => {
     res.json(await admin.resetRules());
-  }));
-
-  router.post('/calibration', asyncHandler(async (_req, res) => {
-    res.json(await admin.runCalibration());
   }));
 
   router.post(

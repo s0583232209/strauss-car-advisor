@@ -12,7 +12,6 @@ import type {
   AdminOverview,
   AuthStatus,
   AuthUser,
-  CalibrationSummary,
   ChatStreamEvent,
   EmployeeProfile,
   ExtractedPayslipData,
@@ -207,7 +206,6 @@ export const api = {
     overview: () => request<AdminOverview>('GET', '/admin/overview'),
     saveRules: (rules: unknown) => request<Rules>('PUT', '/admin/rules', { body: { rules } }),
     resetRules: () => request<Rules>('POST', '/admin/rules/reset'),
-    runCalibration: () => request<CalibrationSummary>('POST', '/admin/calibration'),
     uploadTaxCsv: (file: File) =>
       request<{ count: number }>('POST', '/admin/tax-records', { raw: file, contentType: 'text/csv' }),
     clearTaxRecords: () => request<void>('DELETE', '/admin/tax-records'),
