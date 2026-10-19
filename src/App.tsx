@@ -103,7 +103,7 @@ export default function App() {
   }, [showsTicketBadge]);
 
   return (
-    <div className="min-h-screen bg-surface text-ink flex flex-col font-sans">
+    <div className="isolate min-h-screen bg-surface text-ink flex flex-col font-sans">
       {/* Top Header with role navigation */}
       <Header
         activeScreen={screen ?? 'employee'}
@@ -136,8 +136,9 @@ export default function App() {
         {!needsLogin && !is404 && !is403 && screen === 'guide' && <GuideView />}
       </main>
 
-      {/* Footer: Strauss-green hills with vehicles slowly driving over them */}
-      <footer className="mt-10">
+      {/* Footer: Strauss-green hills with vehicles slowly driving over them.
+          Pulled up behind the content (the top of the hills is empty sky) so short screens need no scroll. */}
+      <footer className="relative -z-10 -mt-12 sm:-mt-16">
         <HillsScene />
         <div className="bg-green -mt-px py-3 px-4 flex items-center justify-center gap-2 text-center text-xs font-medium text-ink">
           <AdvisorLogo variant="light" className="w-6 h-6 shrink-0" />
