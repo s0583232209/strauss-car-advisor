@@ -74,5 +74,19 @@ Health check: `GET /api/health` returns `{ "status": "ok" }`.
   accept per-instance limits; data stays consistent in Supabase.
 - Admin rule changes are applied in memory on the instance that saved them and loaded by the
   others at their next start.
-- Serverless platforms that freeze the process between requests (e.g. Vercel functions) do not fit
-  this design: the agent turn streams for several seconds.
+- Serverless: see section 5 (Vercel). Each function instance has its own rate limits, session
+  locks and rule cache, as with several instances above.
+
+## 5. Vercel
+
+`vercel.json` runs `vite build && node scripts/vercel-build.mjs`, which writes `.vercel/output`
+(Build Output API): `dist/` as static files and one Node function (`server/vercel.ts`, bundled by
+esbuild) for `/api/*`, with response streaming and `maxDuration` 60s. Vercel's own TypeScript
+builder is not used (it cannot compile TypeScript 7).
+
+1. Import the GitHub repo in Vercel (Framework preset: Other; the settings come from `vercel.json`).
+2. Environment variables (Production): `GEMINI_API_KEY`, `GEMINI_MODEL`, `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `TRUST_PROXY=1`. Not `PORT`, `HOST`, `DATA_DIR` or any `VITE_*`.
+3. Check `https://<project>.vercel.app/api/health` returns `{ "status": "ok" }`, then log in.
+
+Local check of the output: `npx vite build && node scripts/vercel-build.mjs`.
