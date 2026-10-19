@@ -11,15 +11,8 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import path from 'node:path';
-import { createApp } from './api/app.ts';
-import { configureLlm } from './bl/agent/llm.ts';
-import { createGemini } from './bl/llm/gemini.ts';
-import { createAdminService } from './bl/services/adminService.ts';
-import { createAuthService } from './bl/services/authService.ts';
-import { createSessionService } from './bl/services/sessionService.ts';
-import { createTicketService } from './bl/services/ticketService.ts';
+import { buildApiApp } from './bootstrap.ts';
 import { ConfigError, loadConfig } from './config.ts';
-import { createAuthGateway, createRepository } from './dal/index.ts';
 
 dotenv.config({ quiet: true });
 
@@ -37,33 +30,7 @@ async function main() {
   const { config, warnings } = loaded;
   for (const w of warnings) console.warn(`[config] ${w}`);
 
-  // Data Access Layer
-  const repo = createRepository({
-    supabaseUrl: config.supabaseUrl,
-    supabaseServiceKey: config.supabaseServiceKey,
-    dataDir: config.dataDir,
-  });
-  const authGateway = createAuthGateway(config);
-
-  // Business Logic Layer
-  const gemini = createGemini(config.gemini);
-  configureLlm({ transport: gemini.generate, fallback: config.fallback });
-  const admin = createAdminService(repo);
-  await admin.init();
-  const sessions = createSessionService(repo);
-  const tickets = createTicketService(repo);
-  const auth = authGateway ? createAuthService(authGateway, repo) : null;
-
-  // API Layer
-  const app = createApp({
-    config,
-    sessions,
-    tickets,
-    admin,
-    auth,
-    extractPayslip: gemini.extractPayslip,
-    healthDetails: () => ({ ...gemini.status(), storage: repo.kind }),
-  });
+  const { app, storage } = await buildApiApp(config);
 
   // Client (presentation)
   if (!config.isProduction) {
@@ -79,7 +46,7 @@ async function main() {
   }
 
   const server = app.listen(config.port, config.host, () => {
-    console.log(`Server listening on http://${config.host}:${config.port} (storage: ${repo.kind})`);
+    console.log(`Server listening on http://${config.host}:${config.port} (storage: ${storage})`);
   });
 
   // Cloud platforms stop containers with SIGTERM: finish open requests first
