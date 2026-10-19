@@ -10,7 +10,6 @@ import { AccessGate } from './ui/AccessGate.tsx';
 import { AccessDeniedPage } from './ui/AccessDeniedPage.tsx';
 import { AdminView } from './ui/AdminView.tsx';
 import { EmployeeView } from './ui/EmployeeView.tsx';
-import { GuideView } from './ui/GuideView.tsx';
 import { AdvisorLogo, HillsScene } from './ui/CarDecor.tsx';
 import { ActiveScreen, ALL_SCREENS, Header, SCREENS_BY_ROLE } from './ui/Header.tsx';
 import { NotFoundPage } from './ui/NotFoundPage.tsx';
@@ -35,8 +34,8 @@ export default function App() {
   const screens: ActiveScreen[] = !auth || needsLogin ? [] : auth.user ? SCREENS_BY_ROLE[auth.user.role] : ALL_SCREENS;
   const userRole = auth?.user?.role ?? (auth && !auth.enabled ? 'admin' : null);
 
-  // /:role/pagename — e.g. /employee/employee, /rep/rep, /admin/guide
-  const PAGE_MAP: Record<string, ActiveScreen> = { home: 'employee', rep: 'rep', admin: 'admin', guide: 'guide' };
+  // /:role/pagename — e.g. /employee/employee, /rep/rep, /admin/admin
+  const PAGE_MAP: Record<string, ActiveScreen> = { home: 'employee', rep: 'rep', admin: 'admin' };
 
   const screenFromPath = (): ActiveScreen | null => {
     const parts = window.location.pathname.split('/').filter(Boolean);
@@ -133,7 +132,6 @@ export default function App() {
 
         {!needsLogin && !is404 && !is403 && screen === 'admin' && <AdminView />}
 
-        {!needsLogin && !is404 && !is403 && screen === 'guide' && <GuideView />}
       </main>
 
       {/* Footer: Strauss-green hills with vehicles slowly driving over them.

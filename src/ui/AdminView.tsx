@@ -7,37 +7,29 @@ import {
   AlertCircle,
   Briefcase,
   Car as CarIcon,
-  CheckCircle2,
   Database,
   Download,
-  FileCheck,
   FileJson,
   FileSpreadsheet,
   Info,
   Play,
-  RefreshCw,
   Search,
   Sliders,
   Upload,
   Users,
-  XCircle,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import type { AdminOverview, CalibrationSummary, Rules, VehicleLookupResult } from '../../shared/types.ts';
+import type { AdminOverview, Rules, VehicleLookupResult } from '../../shared/types.ts';
 import { api, ApiError } from '../api/client.ts';
 
 export const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    'calibration' | 'rules' | 'catalog' | 'occupations' | 'employees' | 'tax' | 'db' | 'assumptions'
-  >('calibration');
+    'rules' | 'catalog' | 'occupations' | 'employees' | 'tax' | 'db' | 'assumptions'
+  >('rules');
 
   // Reference data, rules and record count from the server
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  // Calibration test runner state
-  const [calibrationData, setCalibrationData] = useState<CalibrationSummary | null>(null);
-  const [isRunningTests, setIsRunningTests] = useState(false);
 
   // Rules state
   const [currentRules, setCurrentRules] = useState<Rules | null>(null);
@@ -75,7 +67,6 @@ export const AdminView: React.FC = () => {
       showRules(o.rules);
       setTaxRowCount(o.taxRecordCount);
       setLoadError(null);
-      runTests();
     } catch (err) {
       handleApiError(err);
     }
@@ -85,17 +76,6 @@ export const AdminView: React.FC = () => {
   useEffect(() => {
     loadOverview();
   }, []);
-
-  const runTests = async () => {
-    setIsRunningTests(true);
-    try {
-      setCalibrationData(await api.admin.runCalibration());
-    } catch (err) {
-      handleApiError(err);
-    } finally {
-      setIsRunningTests(false);
-    }
-  };
 
   const refreshDbCount = async () => {
     try {
@@ -121,7 +101,6 @@ export const AdminView: React.FC = () => {
     try {
       showRules(await api.admin.saveRules(parsed));
       flashRulesMsg('הכללים נשמרו ועודכנו במנוע בהצלחה!');
-      runTests();
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 400) alert(err.message);
       else handleApiError(err);
@@ -132,7 +111,6 @@ export const AdminView: React.FC = () => {
     try {
       showRules(await api.admin.resetRules());
       flashRulesMsg('הכללים אופסו לברירת המחדל.');
-      runTests();
     } catch (err) {
       handleApiError(err);
     }
@@ -149,7 +127,6 @@ export const AdminView: React.FC = () => {
       setCsvProgress(100);
       setCsvUploadStatus(`הקובץ נטען בהצלחה! ${count.toLocaleString()} רשומות נשמרו בשרת.`);
       refreshDbCount();
-      runTests();
     } catch (err: any) {
       setCsvProgress(0);
       if (err instanceof ApiError && err.status === 401) handleApiError(err);
@@ -184,7 +161,7 @@ export const AdminView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-ink">ניהול נתונים, כללים ובדיקות כיול</h2>
+            <h2 className="text-xl font-bold text-ink">ניהול נתונים וכללים</h2>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand/10 text-brand-dark">
               Admin Panel
             </span>
@@ -193,46 +170,10 @@ export const AdminView: React.FC = () => {
             כל הנתונים והכללים ניתנים לעדכון והחלפה (פיילוט מחליף נתונים, לא קוד)
           </p>
         </div>
-
-        {/* Quick calibration status badge */}
-        {calibrationData && (
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
-            <span className="text-slate-500">סטטוס כיול:</span>
-            <span
-              className={`font-bold flex items-center gap-1 ${
-                calibrationData.failed === 0 ? 'text-success' : 'text-danger'
-              }`}
-            >
-              {calibrationData.failed === 0 ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>100% עבר ({calibrationData.passed}/{calibrationData.total})</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-4 h-4" />
-                  <span>{calibrationData.failed} נכשלו מתוך {calibrationData.total}</span>
-                </>
-              )}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Tabs navigation */}
       <div className="flex items-center gap-1 overflow-x-auto pb-2 border-b border-slate-200 mb-6 text-xs font-semibold">
-        <button
-          onClick={() => setActiveTab('calibration')}
-          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'calibration'
-              ? 'bg-brand text-white'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <FileCheck className="w-4 h-4" />
-          <span>בדיקות כיול (Benchmark)</span>
-        </button>
-
         <button
           onClick={() => setActiveTab('rules')}
           className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
@@ -303,85 +244,6 @@ export const AdminView: React.FC = () => {
           <span>הנחות יסוד</span>
         </button>
       </div>
-
-      {/* Tab 1: Calibration Tests */}
-      {activeTab === 'calibration' && (
-        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-ink">בדיקות כיול מקיפות (סעיף 8)</h3>
-              <p className="text-xs text-slate-500">
-                אימות כל תוצאות הנטו, המס, ביטוח לאומי וגילום החשמל של 6 עובדי הדוגמה בדיוק של ±1 ₪
-              </p>
-            </div>
-
-            <button
-              onClick={runTests}
-              disabled={isRunningTests}
-              className="lift px-4 py-2 rounded-full text-xs font-bold bg-brand text-white hover:bg-brand-dark transition-colors flex items-center gap-1.5 shrink-0"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRunningTests ? 'animate-spin' : ''}`} />
-              <span>הרץ בדיקות כיול עכשיו</span>
-            </button>
-          </div>
-
-          {calibrationData && (
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-right text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="p-3">סטטוס</th>
-                    <th className="p-3">שם הבדיקה</th>
-                    <th className="p-3">קטגוריה</th>
-                    <th className="p-3">ערך צפוי</th>
-                    <th className="p-3">ערך בפועל</th>
-                    <th className="p-3">הערות / פרטים</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {calibrationData.results.map((res, idx) => (
-                    <tr
-                      key={idx}
-                      className={res.passed ? 'hover:bg-slate-50' : 'bg-danger/5 hover:bg-danger/10'}
-                    >
-                      <td className="p-3">
-                        {res.passed ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-success/10 text-success">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>עבר</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger">
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>נכשל</span>
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 font-semibold text-slate-900">{res.name}</td>
-                      <td className="p-3 text-slate-500">
-                        {res.category === 'benchmark'
-                          ? 'בנצ׳מרק עובדים'
-                          : res.category === 'rules'
-                          ? 'כללי מדיניות'
-                          : res.category === 'lookup'
-                          ? 'שליפת שווי שימוש'
-                          : 'קבוצה ב׳ ויתור'}
-                      </td>
-                      <td className="p-3 font-mono font-medium text-slate-700" dir="ltr">
-                        {res.expected}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-slate-900" dir="ltr">
-                        {res.actual}
-                      </td>
-                      <td className="p-3 text-slate-500 text-[11px]">{res.details || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Tab 2: Rules JSON */}
       {activeTab === 'rules' && (

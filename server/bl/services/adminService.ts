@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/** Admin use cases: rules, reference data, the Tax Authority file and the calibration suite */
+/** Admin use cases: rules, reference data and the Tax Authority file */
 
 import catalogData from '../../data/catalog.json';
 import employeesData from '../../data/employees.json';
@@ -12,14 +12,13 @@ import { lookupBenefitValue, makeLookupKey } from '../engine/benefit.ts';
 import { getRules, resetRules, setRules } from '../engine/rules.ts';
 import type { AdminOverview, Car, EmployeeProfile, Occupation, Rules, VehicleLookupResult } from '../engine/types.ts';
 import type { Repository } from '../../dal/index.ts';
-import { runCalibrationSuite } from './calibration.ts';
 import { parseTaxAuthorityCsv } from './taxCsv.ts';
 
 export class InvalidRulesError extends Error {
   readonly status = 400;
 }
 
-/** The parts of Rules the engine reads directly; anything else is checked by the calibration suite */
+/** The parts of Rules the engine reads directly */
 function assertRulesShape(r: any): asserts r is Rules {
   const ok =
     r &&
@@ -63,8 +62,6 @@ export function createAdminService(repo: Repository) {
       await repo.saveRules(null);
       return getRules();
     },
-
-    runCalibration: runCalibrationSuite,
 
     async importTaxCsv(buffer: Uint8Array): Promise<number> {
       const records = parseTaxAuthorityCsv(buffer);

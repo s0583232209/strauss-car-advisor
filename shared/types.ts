@@ -267,22 +267,6 @@ export interface SampleEmployee {
   group: EligibilityGroup;
 }
 
-export interface TestCaseResult {
-  name: string;
-  category: 'benchmark' | 'rules' | 'lookup' | 'group_b';
-  passed: boolean;
-  expected: string;
-  actual: string;
-  details?: string;
-}
-
-export interface CalibrationSummary {
-  passed: number;
-  failed: number;
-  total: number;
-  results: TestCaseResult[];
-}
-
 /** Everything the admin screen shows */
 export interface AdminOverview {
   rules: Rules;

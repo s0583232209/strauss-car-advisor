@@ -30,7 +30,7 @@ Roles and screens:
 |---|---|---|
 | `employee` | Employee | own conversations (`/sessions`), `/payslip`, `/meta` |
 | `rep` | Employee, Rep | as employee + `/tickets` |
-| `admin` | all, incl. Data and Guide | as rep + `/admin` |
+| `admin` | all, incl. Data | as rep + `/admin` |
 
 Without a login every API call except `/auth`, `/health` and `/tickets/summary` returns 401; a
 role that is not allowed gets 403; someone else's conversation is 404. A user with no `app_users`
