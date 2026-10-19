@@ -44,12 +44,31 @@ writeFileSync(path.join(fnDir, '.vc-config.json'), JSON.stringify({
   maxDuration: 60, // an agent turn can take ~30s
 }, null, 2));
 
+// The client gets the same security headers as the API (server/api/middleware.ts), since Vercel's
+// CDN serves it without Express
+const headerModule = await build({
+  entryPoints: ['server/api/middleware.ts'],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  write: false,
+  logLevel: 'warning',
+});
+const { securityHeaderValues } = await import(
+  `data:text/javascript;base64,${Buffer.from(headerModule.outputFiles[0].text).toString('base64')}`
+);
+const security = securityHeaderValues(true);
+
 writeFileSync(path.join(out, 'config.json'), JSON.stringify({
   version: 3,
   routes: [
     { src: '^/api(/.*)?$', dest: '/api' },
+    { src: '^/(.*)$', headers: security, continue: true },
+    // Build assets have a content hash in their name, so they never change
+    { src: '^/assets/(.*)$', headers: { 'Cache-Control': 'public, max-age=31536000, immutable' }, continue: true },
     { handle: 'filesystem' },
-    // Hashed build assets never change; everything else falls back to the SPA
+    // A missing asset is a 404, not the SPA page served as JavaScript
+    { src: '^/assets/(.*)$', status: 404 },
     { src: '^/(.*)$', dest: '/index.html', headers: { 'Cache-Control': 'no-cache' } },
   ],
 }, null, 2));
