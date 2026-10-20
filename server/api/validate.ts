@@ -5,7 +5,7 @@
 
 /** Input validation for every API body and parameter (unknown fields are rejected) */
 
-import type { EmployeeProfile } from '../../shared/types.ts';
+import type { EmployeeProfile, UserRole } from '../../shared/types.ts';
 import { PAYSLIP_FIELDS } from '../bl/agent/extract.ts';
 import { HttpError } from './middleware.ts';
 
@@ -122,6 +122,20 @@ export function loginBody(body: unknown): { email: string; password: string } {
   return { email, password: b.password as string };
 }
 
+const USER_ROLES: readonly UserRole[] = ['employee', 'rep', 'admin'];
+
+export function createUserBody(body: unknown): { email: string; password: string; role: UserRole } {
+  const b = object(body, ['email', 'password', 'role'], 'משתמש חדש');
+  const email = text(b.email, 'email', 254)!.toLowerCase();
+  if (!EMAIL.test(email)) fail('email: כתובת לא תקינה');
+  if (typeof b.password !== 'string' || !b.password) fail('password: שדה חובה');
+  // 72: the identity provider's bcrypt limit
+  if ((b.password as string).length < 8) fail('password: לפחות 8 תווים');
+  if ((b.password as string).length > 72) fail('password: ארוך מדי (עד 72 תווים)');
+  if (!USER_ROLES.includes(b.role as UserRole)) fail('role: ערך לא תקין');
+  return { email, password: b.password as string, role: b.role as UserRole };
+}
+
 export function ticketAnswerBody(body: unknown): { status: 'answered' | 'closed'; text?: string; value?: number; effectiveFrom?: string } {
   const b = object(body, ['status', 'text', 'value', 'effectiveFrom'], 'תשובת נציג');
   if (b.status !== 'answered' && b.status !== 'closed') fail('status: ערך לא תקין');
@@ -165,6 +179,13 @@ export function rulesBody(body: unknown): unknown {
   const b = object(body, ['rules'], 'כללים');
   if (!isObject(b.rules)) fail('rules: נדרש אובייקט');
   return b.rules;
+}
+
+const DATA_TABLES = ['catalog', 'occupations', 'employees'] as const;
+
+export function dataTableParam(v: unknown): (typeof DATA_TABLES)[number] {
+  if (!DATA_TABLES.includes(v as (typeof DATA_TABLES)[number])) fail('טבלה לא מוכרת');
+  return v as (typeof DATA_TABLES)[number];
 }
 
 export function lookupQuery(q: Record<string, unknown>): { year: string; type: string; product: string; model: string } {

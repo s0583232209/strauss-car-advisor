@@ -13,12 +13,16 @@ import type {
   AuthStatus,
   AuthUser,
   ChatStreamEvent,
+  DataFilePreview,
+  DataTableKind,
   EmployeeProfile,
   ExtractedPayslipData,
   Rules,
+  RulesPreview,
   SampleEmployee,
   SessionState,
   SupportTicket,
+  UserRole,
   VehicleLookupResult,
 } from '../../shared/types.ts';
 
@@ -27,6 +31,8 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 // Per-browser convenience: a lost value only means the server looks up the user's last conversation
 const SESSION_KEY = 'yoetz_session_id';
@@ -206,9 +212,16 @@ export const api = {
     overview: () => request<AdminOverview>('GET', '/admin/overview'),
     saveRules: (rules: unknown) => request<Rules>('PUT', '/admin/rules', { body: { rules } }),
     resetRules: () => request<Rules>('POST', '/admin/rules/reset'),
+    previewRules: (rules: unknown) => request<RulesPreview>('POST', '/admin/rules/preview', { body: { rules } }),
+    /** The data workbook (.xlsx): preview changes nothing; apply replaces every table found in it */
+    previewDataFile: (file: File) => request<DataFilePreview>('POST', '/admin/data/preview', { raw: file, contentType: XLSX_TYPE }),
+    applyDataFile: (file: File) => request<DataFilePreview>('POST', '/admin/data/apply', { raw: file, contentType: XLSX_TYPE }),
+    resetDataTable: (table: DataTableKind) => request<void>('DELETE', `/admin/data/${table}`),
     uploadTaxCsv: (file: File) =>
       request<{ count: number }>('POST', '/admin/tax-records', { raw: file, contentType: 'text/csv' }),
     clearTaxRecords: () => request<void>('DELETE', '/admin/tax-records'),
+    createUser: (user: { email: string; password: string; role: UserRole }) =>
+      request<AuthUser>('POST', '/admin/users', { body: user }),
     lookup: async (q: { year: string; type: string; product: string; model: string }) =>
       (await request<{ result: VehicleLookupResult | null }>('GET', `/admin/tax-records/lookup?${new URLSearchParams(q)}`)).result,
   },

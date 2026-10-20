@@ -31,7 +31,12 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onLoggedIn }) => {
   const canSubmit = email.trim() !== '' && password !== '' && !busy;
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
+    // Side by side on wide screens (login on the right in RTL), stacked on phones
+    <div
+      className={`mx-auto px-4 py-16 grid gap-4 items-start ${
+        DEMO_USERS.length > 0 ? 'max-w-md md:max-w-4xl md:grid-cols-2' : 'max-w-md'
+      }`}
+    >
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -98,7 +103,7 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onLoggedIn }) => {
       </form>
 
       {DEMO_USERS.length > 0 && (
-        <div className="mt-4 bg-white rounded-2xl border border-line shadow-xs p-5 space-y-3">
+        <div className="bg-white rounded-2xl border border-line shadow-xs p-5 space-y-3">
           <div>
             <h3 className="text-sm font-bold text-ink">משתמשי בדיקה לצוות ההאקתון</h3>
             <p className="text-xs text-slate-500">

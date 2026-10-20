@@ -4,11 +4,10 @@
  */
 
 import aliasesData from '../../data/car-aliases.json';
-import catalogData from '../../data/catalog.json';
+import { getCatalog } from '../engine/referenceData.ts';
 import { canSelectCarGroup } from '../engine/rules.ts';
 import { Car, EligibilityGroup } from '../engine/types.ts';
 
-const carsCatalog = catalogData as Car[];
 const aliases = aliasesData as Record<string, string[]>;
 
 /** Score from which a name counts as found (exact or contained), below it only suggestions */
@@ -66,10 +65,10 @@ export interface CarSearchResult {
  */
 export function searchCars(query: string, employeeGroup?: EligibilityGroup): CarSearchResult {
   const q = query.trim();
-  const byId = carsCatalog.filter((c) => c.id.toLowerCase() === q.toLowerCase());
+  const byId = getCatalog().filter((c) => c.id.toLowerCase() === q.toLowerCase());
   if (byId.length > 0) return { matches: byId, suggestions: [] };
 
-  const scored = carsCatalog
+  const scored = getCatalog()
     .map((car) => ({ car, score: scoreCar(car, q) }))
     .sort((a, b) => b.score - a.score);
 
@@ -96,9 +95,9 @@ export function numberedLine(text: string | undefined, n: number): string | unde
 /** The car named on a list line: by catalog ID if shown, else by the longest model name on it */
 export function carOnLine(line: string): Car | undefined {
   const upper = line.toUpperCase();
-  const byId = carsCatalog.find((c) => new RegExp(`\\b${c.id}\\b`).test(upper));
+  const byId = getCatalog().find((c) => new RegExp(`\\b${c.id}\\b`).test(upper));
   if (byId) return byId;
-  return carsCatalog
+  return getCatalog()
     .filter((c) => upper.includes(c.model.toUpperCase()))
     .sort((a, b) => b.model.length - a.model.length)[0];
 }

@@ -88,194 +88,6 @@ function canSelectCarGroup(employeeGroup, carGroup) {
 // server/bl/services/sessionService.ts
 import { randomInt, randomUUID } from "node:crypto";
 
-// server/data/employees.json
-var employees_default = [
-  {
-    id: "E-001",
-    name: "\u05E0\u05D5\u05E2\u05D4 \u05DC\u05D5\u05D9",
-    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05DE\u05D5\u05E6\u05E8",
-    group: "\u05D2",
-    base: 18500,
-    commissions: 0,
-    bonus: 0,
-    pensionPct: 6,
-    studyFundPct: 2.5,
-    creditPoints: 2.75,
-    childrenUpTo23: 2,
-    hasCar: true,
-    currentCarId: "CAR-09",
-    currentCarName: "COROLLA CROSS",
-    currentParticipation: 300,
-    currentBenefit: 4070,
-    currentMaintenance: 0
-  },
-  {
-    id: "E-002",
-    name: "\u05D3\u05D5\u05D3 \u05DB\u05D4\u05DF",
-    occupation: "\u05E0\u05E6\u05D9\u05D2/\u05EA \u05DE\u05DB\u05D9\u05E8\u05D5\u05EA \u05E9\u05D8\u05D7",
-    group: "\u05D1",
-    base: 9800,
-    commissions: 2400,
-    bonus: 0,
-    pensionPct: 6,
-    studyFundPct: 0,
-    creditPoints: 2.25,
-    childrenUpTo23: 5,
-    hasCar: true,
-    currentCarId: "CAR-05",
-    currentCarName: "NIRO",
-    currentParticipation: 250,
-    currentBenefit: 2950,
-    currentMaintenance: 0
-  },
-  {
-    id: "E-003",
-    name: "\u05E8\u05D7\u05DC \u05E4\u05E8\u05D9\u05D3\u05DE\u05DF",
-    occupation: "\u05DE\u05E4\u05EA\u05D7/\u05EA \u05EA\u05D5\u05DB\u05E0\u05D4",
-    group: "\u05D1",
-    base: 21e3,
-    commissions: 0,
-    bonus: 0,
-    pensionPct: 6.5,
-    studyFundPct: 2.5,
-    creditPoints: 2.75,
-    childrenUpTo23: 0,
-    hasCar: false,
-    currentCarId: null,
-    currentCarName: "\u05DC\u05DC\u05D0 \u05E8\u05DB\u05D1 (\u05D5\u05D9\u05EA\u05D5\u05E8)",
-    currentParticipation: 0,
-    currentBenefit: 0,
-    currentMaintenance: 1500
-  },
-  {
-    id: "E-004",
-    name: "\u05D9\u05D5\u05E1\u05D9 \u05DE\u05D6\u05E8\u05D7\u05D9",
-    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05D0\u05D6\u05D5\u05E8 \u05DE\u05DB\u05D9\u05E8\u05D5\u05EA",
-    group: "\u05D2",
-    base: 16e3,
-    commissions: 3e3,
-    bonus: 0,
-    pensionPct: 6,
-    studyFundPct: 2.5,
-    creditPoints: 2.25,
-    childrenUpTo23: 3,
-    hasCar: true,
-    currentCarId: "CAR-12",
-    currentCarName: "TUCSON",
-    currentParticipation: 400,
-    currentBenefit: 4790,
-    currentMaintenance: 0
-  },
-  {
-    id: "E-005",
-    name: "\u05DE\u05D9\u05DB\u05DC \u05D0\u05D1\u05E8\u05D4\u05DD",
-    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05E4\u05D9\u05EA\u05D5\u05D7",
-    group: "\u05D2",
-    base: 27e3,
-    commissions: 0,
-    bonus: 0,
-    pensionPct: 7,
-    studyFundPct: 2.5,
-    creditPoints: 2.75,
-    childrenUpTo23: 1,
-    hasCar: true,
-    currentCarId: "CAR-13",
-    currentCarName: "MAZDA 3",
-    currentParticipation: 350,
-    currentBenefit: 4570,
-    currentMaintenance: 0
-  },
-  {
-    id: "E-006",
-    name: "\u05D0\u05DC\u05D9 \u05E9\u05DE\u05E2\u05D5\u05DF",
-    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05DE\u05D7\u05DC\u05E7\u05D4",
-    group: "\u05D3",
-    base: 32e3,
-    commissions: 0,
-    bonus: 2e3,
-    pensionPct: 6,
-    studyFundPct: 2.5,
-    creditPoints: 2.25,
-    childrenUpTo23: 4,
-    hasCar: true,
-    currentCarId: "CAR-15",
-    currentCarName: "OCTAVIA",
-    currentParticipation: 500,
-    currentBenefit: 5150,
-    currentMaintenance: 0
-  },
-  {
-    id: "E-GEN-B",
-    name: "\u05E9\u05D9\u05E8\u05D4 (\u05DE\u05D4\u05E0\u05D3\u05E1\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA - \u05E7\u05D1\u05D5\u05E6\u05D4 \u05D1')",
-    occupation: "\u05DE\u05D4\u05E0\u05D3\u05E1/\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA",
-    group: "\u05D1",
-    base: 15e3,
-    commissions: 0,
-    bonus: 0,
-    pensionPct: 6,
-    studyFundPct: 2.5,
-    creditPoints: 2.25,
-    childrenUpTo23: 0,
-    hasCar: true,
-    currentCarId: "CAR-05",
-    currentCarName: "NIRO",
-    currentParticipation: 250,
-    currentBenefit: 2950,
-    currentMaintenance: 0
-  }
-];
-
-// server/bl/agent/profileStatus.ts
-var UNKNOWN_CAR_NAME = "\u05E8\u05DB\u05D1 \u05D7\u05D1\u05E8\u05D4 \u05E0\u05D5\u05DB\u05D7\u05D9";
-function getProfileFieldStatus(profile) {
-  const num = (v) => typeof v === "number" && Number.isFinite(v);
-  const str = (v) => typeof v === "string" && v.trim() !== "";
-  const fields = [
-    { field: "base", label_he: "\u05E9\u05DB\u05E8 \u05D1\u05E1\u05D9\u05E1 \u05D7\u05D5\u05D3\u05E9\u05D9", known: num(profile.base) && profile.base > 0, value: String(profile.base) },
-    { field: "group", label_he: "\u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA", known: str(profile.group), value: profile.group },
-    { field: "occupation", label_he: "\u05E2\u05D9\u05E1\u05D5\u05E7/\u05EA\u05E4\u05E7\u05D9\u05D3", known: str(profile.occupation), value: profile.occupation },
-    { field: "hasCar", label_he: "\u05E8\u05DB\u05D1 \u05D7\u05D1\u05E8\u05D4 \u05DB\u05D9\u05D5\u05DD", known: typeof profile.hasCar === "boolean", value: profile.hasCar ? "\u05DB\u05DF" : "\u05DC\u05D0" },
-    { field: "commissions", label_he: "\u05E2\u05DE\u05DC\u05D5\u05EA", known: num(profile.commissions), value: String(profile.commissions) },
-    { field: "bonus", label_he: "\u05D1\u05D5\u05E0\u05D5\u05E1", known: num(profile.bonus), value: String(profile.bonus) },
-    { field: "pensionPct", label_he: "\u05D0\u05D7\u05D5\u05D6 \u05D4\u05E4\u05E8\u05E9\u05D4 \u05DC\u05E4\u05E0\u05E1\u05D9\u05D4", known: num(profile.pensionPct), value: String(profile.pensionPct) },
-    { field: "studyFundPct", label_he: "\u05D0\u05D7\u05D5\u05D6 \u05D4\u05E4\u05E8\u05E9\u05D4 \u05DC\u05E7\u05E8\u05DF \u05D4\u05E9\u05EA\u05DC\u05DE\u05D5\u05EA", known: num(profile.studyFundPct), value: String(profile.studyFundPct) },
-    { field: "creditPoints", label_he: "\u05E0\u05E7\u05D5\u05D3\u05D5\u05EA \u05D6\u05D9\u05DB\u05D5\u05D9", known: num(profile.creditPoints), value: String(profile.creditPoints) },
-    { field: "childrenUpTo23", label_he: "\u05DE\u05E1\u05E4\u05E8 \u05D9\u05DC\u05D3\u05D9\u05DD \u05E2\u05D3 \u05D2\u05D9\u05DC 23", known: num(profile.childrenUpTo23), value: String(profile.childrenUpTo23) }
-  ];
-  if (profile.hasCar) {
-    fields.push(
-      {
-        field: "currentCarName",
-        label_he: "\u05D3\u05D2\u05DD \u05E8\u05DB\u05D1 \u05E0\u05D5\u05DB\u05D7\u05D9",
-        known: str(profile.currentCarName) && profile.currentCarName !== UNKNOWN_CAR_NAME,
-        value: profile.currentCarName
-      },
-      { field: "currentBenefit", label_he: "\u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 \u05E0\u05D5\u05DB\u05D7\u05D9", known: num(profile.currentBenefit) && profile.currentBenefit > 0, value: String(profile.currentBenefit) },
-      { field: "currentParticipation", label_he: "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05E2\u05D5\u05D1\u05D3 \u05D1\u05E8\u05DB\u05D1 \u05D4\u05E0\u05D5\u05DB\u05D7\u05D9", known: num(profile.currentParticipation), value: String(profile.currentParticipation) }
-    );
-  } else {
-    fields.push({ field: "currentMaintenance", label_he: "\u05D3\u05DE\u05D9 \u05D0\u05D7\u05D6\u05E7\u05EA \u05E8\u05DB\u05D1", known: num(profile.currentMaintenance), value: String(profile.currentMaintenance) });
-  }
-  return fields.map((f) => f.known ? f : { ...f, value: void 0 });
-}
-function describeProfileCard(profile) {
-  const lines = getProfileFieldStatus(profile).map(
-    (f) => f.known ? `- ${f.label_he} (${f.field}): \u2713 \u05E7\u05D9\u05D9\u05DD \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1 = ${f.value}` : `- ${f.label_he} (${f.field}): \u2717 \u05D7\u05E1\u05E8`
-  );
-  return `\u05DB\u05E8\u05D8\u05D9\u05E1 \u05D4\u05E2\u05D5\u05D1\u05D3 \u05D4\u05E0\u05D5\u05DB\u05D7\u05D9 (\u05DE\u05EA\u05E2\u05D3\u05DB\u05DF \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA \u05D0\u05D7\u05E8\u05D9 \u05DB\u05DC update_profile):
-${lines.join("\n")}`;
-}
-function buildOpeningMessage(profile) {
-  const intro = "\u05D4\u05D9\u05D9, \u05D0\u05E0\u05D9 \u05D9\u05D5\u05E2\u05E5 \u05D4\u05E8\u05DB\u05D1. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05D0\u05D5\u05DC \u05D0\u05D5\u05EA\u05D9 \u05DE\u05D4 \u05D9\u05E7\u05E8\u05D4 \u05DC\u05E0\u05D8\u05D5 \u05D0\u05DD \u05EA\u05E2\u05D1\u05E8\u05D5 \u05DC\u05E8\u05DB\u05D1 \u05D7\u05E9\u05DE\u05DC\u05D9, \u05EA\u05D7\u05DC\u05D9\u05E4\u05D5 \u05E8\u05DB\u05D1, \u05EA\u05D5\u05D5\u05EA\u05E8\u05D5 \u05E2\u05DC \u05D4\u05E8\u05DB\u05D1 \u05D0\u05D5 \u05EA\u05D1\u05D7\u05E8\u05D5 \u05D1\u05DE\u05E1\u05DC\u05D5\u05DC \u05D1\u05E8\u05D5\u05DB\u05EA \u05D9\u05DC\u05D3\u05D9\u05DD.";
-  const status = getProfileFieldStatus(profile);
-  const baseKnown = status.find((f) => f.field === "base")?.known;
-  const groupKnown = status.find((f) => f.field === "group")?.known;
-  if (baseKnown && groupKnown) return `${intro} \u05E4\u05E8\u05D8\u05D9 \u05D4\u05E9\u05DB\u05E8 \u05D5\u05E7\u05D1\u05D5\u05E6\u05EA \u05D4\u05D6\u05DB\u05D0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05DE\u05D5\u05E4\u05D9\u05E2\u05D9\u05DD \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1 \u05E9\u05DC\u05DA, \u05D0\u05D6 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05D0\u05D5\u05DC \u05D9\u05E9\u05E8.`;
-  if (baseKnown) return `${intro} \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05DB\u05D1\u05E8 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1. \u05D1\u05D0\u05D9\u05D6\u05D5 \u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA (\u05D0\u2013\u05D3) \u05D0\u05EA\u05DD?`;
-  if (groupKnown) return `${intro} \u05E7\u05D1\u05D5\u05E6\u05EA \u05D4\u05D6\u05DB\u05D0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1. \u05DE\u05D4 \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9 \u05E9\u05DC\u05DB\u05DD?`;
-  return `${intro} \u05E0\u05EA\u05D7\u05D9\u05DC \u05DE\u05D4\u05E9\u05DB\u05E8: \u05D1\u05D0\u05D9\u05D6\u05D5 \u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA (\u05D0\u2013\u05D3) \u05D0\u05EA\u05DD \u05D5\u05DE\u05D4 \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9?`;
-}
-
 // server/data/catalog.json
 var catalog_default = [
   {
@@ -600,6 +412,143 @@ var catalog_default = [
   }
 ];
 
+// server/data/employees.json
+var employees_default = [
+  {
+    id: "E-001",
+    name: "\u05E0\u05D5\u05E2\u05D4 \u05DC\u05D5\u05D9",
+    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05DE\u05D5\u05E6\u05E8",
+    group: "\u05D2",
+    base: 18500,
+    commissions: 0,
+    bonus: 0,
+    pensionPct: 6,
+    studyFundPct: 2.5,
+    creditPoints: 2.75,
+    childrenUpTo23: 2,
+    hasCar: true,
+    currentCarId: "CAR-09",
+    currentCarName: "COROLLA CROSS",
+    currentParticipation: 300,
+    currentBenefit: 4070,
+    currentMaintenance: 0
+  },
+  {
+    id: "E-002",
+    name: "\u05D3\u05D5\u05D3 \u05DB\u05D4\u05DF",
+    occupation: "\u05E0\u05E6\u05D9\u05D2/\u05EA \u05DE\u05DB\u05D9\u05E8\u05D5\u05EA \u05E9\u05D8\u05D7",
+    group: "\u05D1",
+    base: 9800,
+    commissions: 2400,
+    bonus: 0,
+    pensionPct: 6,
+    studyFundPct: 0,
+    creditPoints: 2.25,
+    childrenUpTo23: 5,
+    hasCar: true,
+    currentCarId: "CAR-05",
+    currentCarName: "NIRO",
+    currentParticipation: 250,
+    currentBenefit: 2950,
+    currentMaintenance: 0
+  },
+  {
+    id: "E-003",
+    name: "\u05E8\u05D7\u05DC \u05E4\u05E8\u05D9\u05D3\u05DE\u05DF",
+    occupation: "\u05DE\u05E4\u05EA\u05D7/\u05EA \u05EA\u05D5\u05DB\u05E0\u05D4",
+    group: "\u05D1",
+    base: 21e3,
+    commissions: 0,
+    bonus: 0,
+    pensionPct: 6.5,
+    studyFundPct: 2.5,
+    creditPoints: 2.75,
+    childrenUpTo23: 0,
+    hasCar: false,
+    currentCarId: null,
+    currentCarName: "\u05DC\u05DC\u05D0 \u05E8\u05DB\u05D1 (\u05D5\u05D9\u05EA\u05D5\u05E8)",
+    currentParticipation: 0,
+    currentBenefit: 0,
+    currentMaintenance: 1500
+  },
+  {
+    id: "E-004",
+    name: "\u05D9\u05D5\u05E1\u05D9 \u05DE\u05D6\u05E8\u05D7\u05D9",
+    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05D0\u05D6\u05D5\u05E8 \u05DE\u05DB\u05D9\u05E8\u05D5\u05EA",
+    group: "\u05D2",
+    base: 16e3,
+    commissions: 3e3,
+    bonus: 0,
+    pensionPct: 6,
+    studyFundPct: 2.5,
+    creditPoints: 2.25,
+    childrenUpTo23: 3,
+    hasCar: true,
+    currentCarId: "CAR-12",
+    currentCarName: "TUCSON",
+    currentParticipation: 400,
+    currentBenefit: 4790,
+    currentMaintenance: 0
+  },
+  {
+    id: "E-005",
+    name: "\u05DE\u05D9\u05DB\u05DC \u05D0\u05D1\u05E8\u05D4\u05DD",
+    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05E4\u05D9\u05EA\u05D5\u05D7",
+    group: "\u05D2",
+    base: 27e3,
+    commissions: 0,
+    bonus: 0,
+    pensionPct: 7,
+    studyFundPct: 2.5,
+    creditPoints: 2.75,
+    childrenUpTo23: 1,
+    hasCar: true,
+    currentCarId: "CAR-13",
+    currentCarName: "MAZDA 3",
+    currentParticipation: 350,
+    currentBenefit: 4570,
+    currentMaintenance: 0
+  },
+  {
+    id: "E-006",
+    name: "\u05D0\u05DC\u05D9 \u05E9\u05DE\u05E2\u05D5\u05DF",
+    occupation: "\u05DE\u05E0\u05D4\u05DC/\u05EA \u05DE\u05D7\u05DC\u05E7\u05D4",
+    group: "\u05D3",
+    base: 32e3,
+    commissions: 0,
+    bonus: 2e3,
+    pensionPct: 6,
+    studyFundPct: 2.5,
+    creditPoints: 2.25,
+    childrenUpTo23: 4,
+    hasCar: true,
+    currentCarId: "CAR-15",
+    currentCarName: "OCTAVIA",
+    currentParticipation: 500,
+    currentBenefit: 5150,
+    currentMaintenance: 0
+  },
+  {
+    id: "E-GEN-B",
+    name: "\u05E9\u05D9\u05E8\u05D4 (\u05DE\u05D4\u05E0\u05D3\u05E1\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA - \u05E7\u05D1\u05D5\u05E6\u05D4 \u05D1')",
+    occupation: "\u05DE\u05D4\u05E0\u05D3\u05E1/\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA",
+    group: "\u05D1",
+    base: 15e3,
+    commissions: 0,
+    bonus: 0,
+    pensionPct: 6,
+    studyFundPct: 2.5,
+    creditPoints: 2.25,
+    childrenUpTo23: 0,
+    hasCar: true,
+    currentCarId: "CAR-05",
+    currentCarName: "NIRO",
+    currentParticipation: 250,
+    currentBenefit: 2950,
+    currentMaintenance: 0
+  }
+];
+
 // server/data/occupations.json
 var occupations_default = [
   {
@@ -701,6 +650,79 @@ var occupations_default = [
     maintenance: 3e3
   }
 ];
+
+// server/bl/engine/referenceData.ts
+var REFERENCE_KINDS = ["catalog", "occupations", "employees"];
+var clone = (v) => JSON.parse(JSON.stringify(v));
+var defaults = {
+  catalog: catalog_default,
+  occupations: occupations_default,
+  employees: employees_default
+};
+var active = clone(defaults);
+var version = 0;
+var getCatalog = () => active.catalog;
+var getOccupations = () => active.occupations;
+var getEmployees = () => active.employees;
+var referenceVersion = () => version;
+function setReferenceData(kind, rows) {
+  active[kind] = clone(rows);
+  version++;
+}
+function resetReferenceData(kind) {
+  setReferenceData(kind, defaults[kind]);
+}
+
+// server/bl/agent/profileStatus.ts
+var UNKNOWN_CAR_NAME = "\u05E8\u05DB\u05D1 \u05D7\u05D1\u05E8\u05D4 \u05E0\u05D5\u05DB\u05D7\u05D9";
+function getProfileFieldStatus(profile) {
+  const num = (v) => typeof v === "number" && Number.isFinite(v);
+  const str = (v) => typeof v === "string" && v.trim() !== "";
+  const fields = [
+    { field: "base", label_he: "\u05E9\u05DB\u05E8 \u05D1\u05E1\u05D9\u05E1 \u05D7\u05D5\u05D3\u05E9\u05D9", known: num(profile.base) && profile.base > 0, value: String(profile.base) },
+    { field: "group", label_he: "\u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA", known: str(profile.group), value: profile.group },
+    { field: "occupation", label_he: "\u05E2\u05D9\u05E1\u05D5\u05E7/\u05EA\u05E4\u05E7\u05D9\u05D3", known: str(profile.occupation), value: profile.occupation },
+    { field: "hasCar", label_he: "\u05E8\u05DB\u05D1 \u05D7\u05D1\u05E8\u05D4 \u05DB\u05D9\u05D5\u05DD", known: typeof profile.hasCar === "boolean", value: profile.hasCar ? "\u05DB\u05DF" : "\u05DC\u05D0" },
+    { field: "commissions", label_he: "\u05E2\u05DE\u05DC\u05D5\u05EA", known: num(profile.commissions), value: String(profile.commissions) },
+    { field: "bonus", label_he: "\u05D1\u05D5\u05E0\u05D5\u05E1", known: num(profile.bonus), value: String(profile.bonus) },
+    { field: "pensionPct", label_he: "\u05D0\u05D7\u05D5\u05D6 \u05D4\u05E4\u05E8\u05E9\u05D4 \u05DC\u05E4\u05E0\u05E1\u05D9\u05D4", known: num(profile.pensionPct), value: String(profile.pensionPct) },
+    { field: "studyFundPct", label_he: "\u05D0\u05D7\u05D5\u05D6 \u05D4\u05E4\u05E8\u05E9\u05D4 \u05DC\u05E7\u05E8\u05DF \u05D4\u05E9\u05EA\u05DC\u05DE\u05D5\u05EA", known: num(profile.studyFundPct), value: String(profile.studyFundPct) },
+    { field: "creditPoints", label_he: "\u05E0\u05E7\u05D5\u05D3\u05D5\u05EA \u05D6\u05D9\u05DB\u05D5\u05D9", known: num(profile.creditPoints), value: String(profile.creditPoints) },
+    { field: "childrenUpTo23", label_he: "\u05DE\u05E1\u05E4\u05E8 \u05D9\u05DC\u05D3\u05D9\u05DD \u05E2\u05D3 \u05D2\u05D9\u05DC 23", known: num(profile.childrenUpTo23), value: String(profile.childrenUpTo23) }
+  ];
+  if (profile.hasCar) {
+    fields.push(
+      {
+        field: "currentCarName",
+        label_he: "\u05D3\u05D2\u05DD \u05E8\u05DB\u05D1 \u05E0\u05D5\u05DB\u05D7\u05D9",
+        known: str(profile.currentCarName) && profile.currentCarName !== UNKNOWN_CAR_NAME,
+        value: profile.currentCarName
+      },
+      { field: "currentBenefit", label_he: "\u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 \u05E0\u05D5\u05DB\u05D7\u05D9", known: num(profile.currentBenefit) && profile.currentBenefit > 0, value: String(profile.currentBenefit) },
+      { field: "currentParticipation", label_he: "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05E2\u05D5\u05D1\u05D3 \u05D1\u05E8\u05DB\u05D1 \u05D4\u05E0\u05D5\u05DB\u05D7\u05D9", known: num(profile.currentParticipation), value: String(profile.currentParticipation) }
+    );
+  } else {
+    fields.push({ field: "currentMaintenance", label_he: "\u05D3\u05DE\u05D9 \u05D0\u05D7\u05D6\u05E7\u05EA \u05E8\u05DB\u05D1", known: num(profile.currentMaintenance), value: String(profile.currentMaintenance) });
+  }
+  return fields.map((f) => f.known ? f : { ...f, value: void 0 });
+}
+function describeProfileCard(profile) {
+  const lines = getProfileFieldStatus(profile).map(
+    (f) => f.known ? `- ${f.label_he} (${f.field}): \u2713 \u05E7\u05D9\u05D9\u05DD \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1 = ${f.value}` : `- ${f.label_he} (${f.field}): \u2717 \u05D7\u05E1\u05E8`
+  );
+  return `\u05DB\u05E8\u05D8\u05D9\u05E1 \u05D4\u05E2\u05D5\u05D1\u05D3 \u05D4\u05E0\u05D5\u05DB\u05D7\u05D9 (\u05DE\u05EA\u05E2\u05D3\u05DB\u05DF \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA \u05D0\u05D7\u05E8\u05D9 \u05DB\u05DC update_profile):
+${lines.join("\n")}`;
+}
+function buildOpeningMessage(profile) {
+  const intro = "\u05D4\u05D9\u05D9, \u05D0\u05E0\u05D9 \u05D9\u05D5\u05E2\u05E5 \u05D4\u05E8\u05DB\u05D1. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05D0\u05D5\u05DC \u05D0\u05D5\u05EA\u05D9 \u05DE\u05D4 \u05D9\u05E7\u05E8\u05D4 \u05DC\u05E0\u05D8\u05D5 \u05D0\u05DD \u05EA\u05E2\u05D1\u05E8\u05D5 \u05DC\u05E8\u05DB\u05D1 \u05D7\u05E9\u05DE\u05DC\u05D9, \u05EA\u05D7\u05DC\u05D9\u05E4\u05D5 \u05E8\u05DB\u05D1, \u05EA\u05D5\u05D5\u05EA\u05E8\u05D5 \u05E2\u05DC \u05D4\u05E8\u05DB\u05D1 \u05D0\u05D5 \u05EA\u05D1\u05D7\u05E8\u05D5 \u05D1\u05DE\u05E1\u05DC\u05D5\u05DC \u05D1\u05E8\u05D5\u05DB\u05EA \u05D9\u05DC\u05D3\u05D9\u05DD.";
+  const status = getProfileFieldStatus(profile);
+  const baseKnown = status.find((f) => f.field === "base")?.known;
+  const groupKnown = status.find((f) => f.field === "group")?.known;
+  if (baseKnown && groupKnown) return `${intro} \u05E4\u05E8\u05D8\u05D9 \u05D4\u05E9\u05DB\u05E8 \u05D5\u05E7\u05D1\u05D5\u05E6\u05EA \u05D4\u05D6\u05DB\u05D0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05DE\u05D5\u05E4\u05D9\u05E2\u05D9\u05DD \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1 \u05E9\u05DC\u05DA, \u05D0\u05D6 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05D0\u05D5\u05DC \u05D9\u05E9\u05E8.`;
+  if (baseKnown) return `${intro} \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05DB\u05D1\u05E8 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1. \u05D1\u05D0\u05D9\u05D6\u05D5 \u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA (\u05D0\u2013\u05D3) \u05D0\u05EA\u05DD?`;
+  if (groupKnown) return `${intro} \u05E7\u05D1\u05D5\u05E6\u05EA \u05D4\u05D6\u05DB\u05D0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1. \u05DE\u05D4 \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9 \u05E9\u05DC\u05DB\u05DD?`;
+  return `${intro} \u05E0\u05EA\u05D7\u05D9\u05DC \u05DE\u05D4\u05E9\u05DB\u05E8: \u05D1\u05D0\u05D9\u05D6\u05D5 \u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA (\u05D0\u2013\u05D3) \u05D0\u05EA\u05DD \u05D5\u05DE\u05D4 \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9?`;
+}
 
 // server/data/occupation-aliases.json
 var occupation_aliases_default = {
@@ -938,11 +960,18 @@ function buildPlainHebrewSummary(todayState, altState, todayLabel, altLabel) {
 }
 
 // server/bl/engine/scenario.ts
-var carsCatalog = catalog_default;
-var occupationsList = occupations_default;
 var normOccupation = (s) => s.replace(/\/(ית|ת|ה)(?=\s|$)/g, "").replace(/["'׳״]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-var occupationWords = new Set(occupationsList.flatMap((o) => normOccupation(o.occupation).split(" ")));
+var occupationIndex = null;
+function index() {
+  if (occupationIndex?.version === referenceVersion()) return occupationIndex;
+  const list2 = getOccupations();
+  const words = new Set(list2.flatMap((o) => normOccupation(o.occupation).split(" ")));
+  occupationIndex = { version: referenceVersion(), words, names: [] };
+  occupationIndex.names = list2.flatMap((o) => [o.occupation, ...occupation_aliases_default[o.occupation] ?? []].map((n) => ({ key: occupationKey(n), occ: o }))).sort((a, b) => b.key.length - a.key.length);
+  return occupationIndex;
+}
 function baseWord(w) {
+  const occupationWords = index().words;
   if (occupationWords.has(w)) return w;
   for (const suffix of ["\u05D9\u05EA", "\u05EA", "\u05D4"]) {
     if (w.endsWith(suffix) && occupationWords.has(w.slice(0, -suffix.length))) return w.slice(0, -suffix.length);
@@ -950,10 +979,10 @@ function baseWord(w) {
   return w;
 }
 var occupationKey = (s) => normOccupation(s).split(" ").map(baseWord).join(" ");
-var occupationNames = occupationsList.flatMap((o) => [o.occupation, ...occupation_aliases_default[o.occupation] ?? []].map((n) => ({ key: occupationKey(n), occ: o }))).sort((a, b) => b.key.length - a.key.length);
 function findOccupation(occupationName) {
   const key = occupationKey(occupationName ?? "");
   if (!key) return void 0;
+  const occupationNames = index().names;
   const exact = occupationNames.find((n) => n.key === key);
   if (exact) return exact.occ;
   return occupationNames.find((n) => ` ${key} `.includes(` ${n.key} `))?.occ;
@@ -1024,7 +1053,7 @@ function buildScenario(profile, request) {
     altState.evGrossUp = 0;
   } else if (request.type === "family_track") {
     const targetCarId = request.targetCarId || "CAR-19";
-    targetCar = carsCatalog.find((c) => c.id === targetCarId) || carsCatalog.find((c) => c.id === "CAR-19");
+    targetCar = getCatalog().find((c) => c.id === targetCarId) || getCatalog().find((c) => c.id === "CAR-19");
     altCarLabel = `${targetCar.model} (${targetCar.fuel}) - \u05DE\u05E1\u05DC\u05D5\u05DC \u05D1\u05E8\u05D5\u05DB\u05EA \u05D9\u05DC\u05D3\u05D9\u05DD`;
     companyCost = targetCar.companyCost;
     const minKids = rules.familyTrack.minChildren;
@@ -1045,10 +1074,10 @@ function buildScenario(profile, request) {
     altState.evGrossUp = 0;
   } else {
     if (!targetCar && request.targetCarId) {
-      targetCar = carsCatalog.find((c) => c.id === request.targetCarId);
+      targetCar = getCatalog().find((c) => c.id === request.targetCarId);
     }
     if (!targetCar) {
-      targetCar = request.type === "go_electric" ? carsCatalog.find((c) => c.group === profile.group && c.driveCode === 3) || carsCatalog.find((c) => c.id === "CAR-10") : carsCatalog.find((c) => c.group === profile.group);
+      targetCar = request.type === "go_electric" ? getCatalog().find((c) => c.group === profile.group && c.driveCode === 3) || getCatalog().find((c) => c.id === "CAR-10") : getCatalog().find((c) => c.group === profile.group);
     }
     companyCost = targetCar.companyCost;
     altCarLabel = `${targetCar.model} (${targetCar.fuel})`;
@@ -1137,7 +1166,6 @@ var car_aliases_default = {
 };
 
 // server/bl/agent/carSearch.ts
-var carsCatalog2 = catalog_default;
 var aliases = car_aliases_default;
 var FOUND_SCORE = 0.9;
 var MAX_SUGGESTIONS = 5;
@@ -1174,9 +1202,9 @@ function nameScore(query, names) {
 }
 function searchCars(query, employeeGroup) {
   const q = query.trim();
-  const byId = carsCatalog2.filter((c) => c.id.toLowerCase() === q.toLowerCase());
+  const byId = getCatalog().filter((c) => c.id.toLowerCase() === q.toLowerCase());
   if (byId.length > 0) return { matches: byId, suggestions: [] };
-  const scored = carsCatalog2.map((car) => ({ car, score: scoreCar(car, q) })).sort((a, b) => b.score - a.score);
+  const scored = getCatalog().map((car) => ({ car, score: scoreCar(car, q) })).sort((a, b) => b.score - a.score);
   const exact = scored.filter((s) => s.score === 1);
   if (exact.length > 0) return { matches: exact.map((s) => s.car), suggestions: [] };
   const contained = scored.filter((s) => s.score >= FOUND_SCORE);
@@ -1193,9 +1221,9 @@ function numberedLine(text2, n) {
 }
 function carOnLine(line) {
   const upper = line.toUpperCase();
-  const byId = carsCatalog2.find((c) => new RegExp(`\\b${c.id}\\b`).test(upper));
+  const byId = getCatalog().find((c) => new RegExp(`\\b${c.id}\\b`).test(upper));
   if (byId) return byId;
-  return carsCatalog2.filter((c) => upper.includes(c.model.toUpperCase())).sort((a, b) => b.model.length - a.model.length)[0];
+  return getCatalog().filter((c) => upper.includes(c.model.toUpperCase())).sort((a, b) => b.model.length - a.model.length)[0];
 }
 
 // server/bl/agent/normalize.ts
@@ -1372,21 +1400,19 @@ function normalizeGroup(raw) {
   if (GROUP_LETTERS.includes(t)) return t;
   return t.startsWith(FAMILY_GROUP) ? FAMILY_GROUP : void 0;
 }
-function groupStated(texts, group) {
-  if (group === FAMILY_GROUP) return texts.some((t) => t.includes(FAMILY_GROUP));
-  return texts.some(
+function groupStated(texts2, group) {
+  if (group === FAMILY_GROUP) return texts2.some((t) => t.includes(FAMILY_GROUP));
+  return texts2.some(
     (t) => t.split(/[\s,.:;!?()/]+/).map(stripQuotes).some((word) => word === group)
   );
 }
 
 // server/bl/agent/tools.ts
-var carsCatalog3 = catalog_default;
-var occupationsList2 = occupations_default;
 var isUnset = (v) => v === void 0 || v === null || typeof v === "number" && !Number.isFinite(v);
 var isBlank = (v) => isUnset(v) || String(v).trim() === "";
-function statedNumbers(texts) {
+function statedNumbers(texts2) {
   const found = /* @__PURE__ */ new Set();
-  for (const text2 of texts) for (const n of extractNumbers(text2)) found.add(n.value);
+  for (const text2 of texts2) for (const n of extractNumbers(text2)) found.add(n.value);
   return found;
 }
 var NUMERIC_PROFILE_FIELDS = [
@@ -1454,7 +1480,7 @@ function getMissingFields(prof, scenarioType = "general") {
 }
 var MAX_OCCUPATION_SUGGESTIONS = 5;
 function suggestOccupations(query) {
-  const scored = occupationsList2.map((o) => ({ o, score: nameScore(query, [o.occupation, o.occupation.replace(/\/(ית|ת|ה)(?=\s|$)/g, "")]) })).sort((a, b) => b.score - a.score);
+  const scored = getOccupations().map((o) => ({ o, score: nameScore(query, [o.occupation, o.occupation.replace(/\/(ית|ת|ה)(?=\s|$)/g, "")]) })).sort((a, b) => b.score - a.score);
   const containing = scored.filter((s) => s.score >= 0.9);
   return (containing.length > 0 ? containing : scored.slice(0, MAX_OCCUPATION_SUGGESTIONS)).map((s) => s.o);
 }
@@ -1783,7 +1809,7 @@ async function executeTool(name, args, context) {
         return { result: res2, outputTextForGuardrail: "" };
       }
       const filterType = args.type || "all";
-      const eligibleCars = carsCatalog3.filter((c) => {
+      const eligibleCars = getCatalog().filter((c) => {
         if (c.group === "\u05DE\u05E9\u05E4\u05D7\u05EA\u05D9") return false;
         if (!canSelectCarGroup(empGroup, c.group)) return false;
         if (filterType === "electric") return c.driveCode === 3;
@@ -1821,7 +1847,7 @@ async function executeTool(name, args, context) {
         return { result: res2, outputTextForGuardrail: "" };
       }
       if (context.repParticipationMode && scType !== "waive_car" && overridePart === void 0) {
-        const car = targetCarId ? carsCatalog3.find((c) => c.id === targetCarId) : void 0;
+        const car = targetCarId ? getCatalog().find((c) => c.id === targetCarId) : void 0;
         const carName = car?.model || "\u05E8\u05DB\u05D1 \u05D7\u05D3\u05E9";
         const ticketId2 = await context.onEscalate(
           `\u05D0\u05D9\u05DE\u05D5\u05EA \u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05E2\u05E6\u05DE\u05D9\u05EA \u05E2\u05D1\u05D5\u05E8 \u05E2\u05D5\u05D1\u05D3/\u05EA: ${context.profile.name || "\u05E2\u05D5\u05D1\u05D3"} \u05D1\u05D1\u05D7\u05D9\u05E8\u05EA ${carName}`,
@@ -2627,7 +2653,6 @@ function applyRepAnswer(ticket, profile, currentComparison, now) {
 
 // server/bl/services/sessionService.ts
 var SAMPLE_LOADED_PREFIX = "\u05E0\u05D8\u05E2\u05E0\u05D5 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4 \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D3\u05D5\u05D2\u05DE\u05D4 \u05E9\u05DC";
-var employees = employees_default;
 var emptyProfile = () => ({});
 var NotFoundError = class extends Error {
   constructor() {
@@ -2645,7 +2670,7 @@ var toState = (s) => ({
   lastComparison: s.lastComparison
 });
 function sampleEmployees() {
-  return employees.map((e) => ({ id: e.id, name: e.name, occupation: e.occupation, group: e.group }));
+  return getEmployees().map((e) => ({ id: e.id, name: e.name, occupation: e.occupation, group: e.group }));
 }
 function createSessionService(repo, now = Date.now) {
   const msgId = (prefix) => `${prefix}-${randomUUID()}`;
@@ -2787,7 +2812,7 @@ function createSessionService(repo, now = Date.now) {
     },
     loadSample(id, employeeId) {
       return withLock(id, async () => {
-        const target = employees.find((e) => e.id === employeeId);
+        const target = getEmployees().find((e) => e.id === employeeId);
         if (!target) throw new NotFoundError("sample employee not found");
         const s = await load(id);
         s.profile = structuredClone(target);
@@ -3193,6 +3218,17 @@ function loginBody(body) {
   if (b.password.length > 128) fail("password: \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9 (\u05E2\u05D3 128 \u05EA\u05D5\u05D5\u05D9\u05DD)");
   return { email, password: b.password };
 }
+var USER_ROLES = ["employee", "rep", "admin"];
+function createUserBody(body) {
+  const b = object(body, ["email", "password", "role"], "\u05DE\u05E9\u05EA\u05DE\u05E9 \u05D7\u05D3\u05E9");
+  const email = text(b.email, "email", 254).toLowerCase();
+  if (!EMAIL.test(email)) fail("email: \u05DB\u05EA\u05D5\u05D1\u05EA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4");
+  if (typeof b.password !== "string" || !b.password) fail("password: \u05E9\u05D3\u05D4 \u05D7\u05D5\u05D1\u05D4");
+  if (b.password.length < 8) fail("password: \u05DC\u05E4\u05D7\u05D5\u05EA 8 \u05EA\u05D5\u05D5\u05D9\u05DD");
+  if (b.password.length > 72) fail("password: \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9 (\u05E2\u05D3 72 \u05EA\u05D5\u05D5\u05D9\u05DD)");
+  if (!USER_ROLES.includes(b.role)) fail("role: \u05E2\u05E8\u05DA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF");
+  return { email, password: b.password, role: b.role };
+}
 function ticketAnswerBody(body) {
   const b = object(body, ["status", "text", "value", "effectiveFrom"], "\u05EA\u05E9\u05D5\u05D1\u05EA \u05E0\u05E6\u05D9\u05D2");
   if (b.status !== "answered" && b.status !== "closed") fail("status: \u05E2\u05E8\u05DA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF");
@@ -3231,6 +3267,11 @@ function rulesBody(body) {
   if (!isObject(b.rules)) fail("rules: \u05E0\u05D3\u05E8\u05E9 \u05D0\u05D5\u05D1\u05D9\u05D9\u05E7\u05D8");
   return b.rules;
 }
+var DATA_TABLES = ["catalog", "occupations", "employees"];
+function dataTableParam(v) {
+  if (!DATA_TABLES.includes(v)) fail("\u05D8\u05D1\u05DC\u05D4 \u05DC\u05D0 \u05DE\u05D5\u05DB\u05E8\u05EA");
+  return v;
+}
 function lookupQuery(q) {
   const digits = (v, field, max) => {
     if (typeof v !== "string" || !new RegExp(`^\\d{1,${max}}$`).test(v)) fail(`${field}: \u05E0\u05D3\u05E8\u05E9 \u05DE\u05E1\u05E4\u05E8`);
@@ -3246,13 +3287,50 @@ function lookupQuery(q) {
 
 // server/api/routes/admin.ts
 var TAX_FILE_LIMIT = "80mb";
-function adminRouter(admin) {
+var DATA_FILE_LIMIT = "5mb";
+var XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+function adminRouter(admin, auth) {
   const router = Router();
+  router.post(
+    "/users",
+    rateLimit({ name: "create-user", windowMs: 6e4, max: 20 }),
+    express.json({ limit: "10kb" }),
+    asyncHandler(async (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      if (!auth) {
+        res.status(503).json({ error: "\u05D4\u05D5\u05E1\u05E4\u05EA \u05DE\u05E9\u05EA\u05DE\u05E9\u05D9\u05DD \u05D3\u05D5\u05E8\u05E9\u05EA \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC-Supabase, \u05E9\u05D0\u05D9\u05E0\u05D5 \u05DE\u05D5\u05D2\u05D3\u05E8 \u05D1\u05E9\u05E8\u05EA" });
+        return;
+      }
+      const { email, password, role } = createUserBody(req.body);
+      res.status(201).json(await auth.createUser(email, password, role));
+    })
+  );
   router.get("/overview", asyncHandler(async (_req, res) => {
     res.json(await admin.overview());
   }));
+  router.post("/rules/preview", express.json({ limit: "200kb" }), asyncHandler(async (req, res) => {
+    res.json(admin.previewRules(rulesBody(req.body)));
+  }));
   router.put("/rules", express.json({ limit: "200kb" }), asyncHandler(async (req, res) => {
     res.json(await admin.saveRules(rulesBody(req.body)));
+  }));
+  const workbook = [
+    rateLimit({ name: "data-upload", windowMs: 6e4, max: 20 }),
+    express.raw({ type: [XLSX_TYPE, "application/octet-stream"], limit: DATA_FILE_LIMIT })
+  ];
+  const fileOf = (body) => {
+    if (!Buffer.isBuffer(body) || body.length === 0) throw new HttpError(400, "\u05D9\u05E9 \u05DC\u05E9\u05DC\u05D5\u05D7 \u05E7\u05D5\u05D1\u05E5 Excel (xlsx)");
+    return new Uint8Array(body);
+  };
+  router.post("/data/preview", ...workbook, asyncHandler(async (req, res) => {
+    res.json(admin.previewDataFile(fileOf(req.body)));
+  }));
+  router.post("/data/apply", ...workbook, asyncHandler(async (req, res) => {
+    res.json(await admin.applyDataFile(fileOf(req.body)));
+  }));
+  router.delete("/data/:table", asyncHandler(async (req, res) => {
+    await admin.resetDataTable(dataTableParam(req.params.table));
+    res.status(204).end();
   }));
   router.post("/rules/reset", asyncHandler(async (_req, res) => {
     res.json(await admin.resetRules());
@@ -3436,8 +3514,11 @@ function createApp(deps) {
   api.use(rateLimit({ name: "api", windowMs: 6e4, max: 600 }));
   const auth = deps.auth ?? null;
   const anyUser = requireRole(auth, ALL_ROLES);
+  api.use(["/sessions", "/meta", "/admin"], (_req, _res, next) => {
+    deps.admin.syncIfStale().then(() => next(), next);
+  });
   api.use("/payslip", anyUser, payslipRouter(deps.extractPayslip));
-  api.use("/admin", requireRole(auth, ["admin"]), adminRouter(deps.admin));
+  api.use("/admin", requireRole(auth, ["admin"]), adminRouter(deps.admin, auth));
   api.use(express3.json({ limit: "100kb" }));
   api.use("/auth", authRouter(auth, config.isProduction));
   api.use("/sessions", anyUser, sessionsRouter(deps.sessions));
@@ -3858,7 +3939,7 @@ async function lookupBenefitValue(regYear, productCode, modelCode, vehicleType =
   if (seedLookupMap.has(key)) {
     return seedLookupMap.get(key);
   }
-  const catItem = catalog_default.find(
+  const catItem = getCatalog().find(
     (c) => String(c.year) === String(regYear).trim() && c.productCode.padStart(5, "0") === String(productCode).trim().padStart(5, "0") && c.modelCode.padStart(5, "0") === String(modelCode).trim().padStart(5, "0")
   );
   if (catItem) {
@@ -3871,6 +3952,352 @@ async function lookupBenefitValue(regYear, productCode, modelCode, vehicleType =
     };
   }
   return null;
+}
+
+// server/bl/services/xlsx.ts
+import { inflateRawSync } from "node:zlib";
+var XlsxError = class extends Error {
+  constructor() {
+    super(...arguments);
+    this.status = 400;
+  }
+};
+var MAX_ENTRY_BYTES = 20 * 1024 * 1024;
+var MAX_ROWS = 5e3;
+var fail2 = (message) => {
+  throw new XlsxError(message);
+};
+function unzip(buf) {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf.readUInt32LE(i) === 101010256) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) fail2("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D0\u05D9\u05E0\u05D5 \u05E7\u05D5\u05D1\u05E5 Excel \u05EA\u05E7\u05D9\u05DF (xlsx)");
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const entries = /* @__PURE__ */ new Map();
+  for (let n = 0; n < count; n++) {
+    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 33639248) fail2("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D0\u05D9\u05E0\u05D5 \u05E7\u05D5\u05D1\u05E5 Excel \u05EA\u05E7\u05D9\u05DF (xlsx)");
+    const method = buf.readUInt16LE(p + 10);
+    const compressedSize = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28);
+    const extraLen = buf.readUInt16LE(p + 30);
+    const commentLen = buf.readUInt16LE(p + 32);
+    const localOffset = buf.readUInt32LE(p + 42);
+    const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
+    p += 46 + nameLen + extraLen + commentLen;
+    entries.set(name, () => {
+      if (localOffset + 30 > buf.length || buf.readUInt32LE(localOffset) !== 67324752) fail2("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D0\u05D9\u05E0\u05D5 \u05E7\u05D5\u05D1\u05E5 Excel \u05EA\u05E7\u05D9\u05DF (xlsx)");
+      const start = localOffset + 30 + buf.readUInt16LE(localOffset + 26) + buf.readUInt16LE(localOffset + 28);
+      const data = buf.subarray(start, start + compressedSize);
+      if (method === 0) return data;
+      if (method !== 8) fail2("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D3\u05D7\u05D5\u05E1 \u05D1\u05E9\u05D9\u05D8\u05D4 \u05E9\u05D0\u05D9\u05E0\u05D4 \u05E0\u05EA\u05DE\u05DB\u05EA");
+      try {
+        return inflateRawSync(data, { maxOutputLength: MAX_ENTRY_BYTES });
+      } catch {
+        return fail2("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05E4\u05D2\u05D5\u05DD \u05D0\u05D5 \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9");
+      }
+    });
+  }
+  return entries;
+}
+function decodeXml(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (_, e) => {
+    const k = e.toLowerCase();
+    if (k === "amp") return "&";
+    if (k === "lt") return "<";
+    if (k === "gt") return ">";
+    if (k === "quot") return '"';
+    if (k === "apos") return "'";
+    return String.fromCodePoint(k.startsWith("#x") ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10));
+  });
+}
+var texts = (xml) => [...xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((m) => decodeXml(m[1])).join("");
+var attr = (tag2, name) => tag2.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
+function columnIndex(ref) {
+  const letters = ref.match(/^[A-Z]+/)?.[0] ?? "A";
+  let n = 0;
+  for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+function parseSheet(xml, shared) {
+  const rows = [];
+  for (const rowMatch of xml.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+    if (rows.length >= MAX_ROWS) fail2(`\u05D4\u05D2\u05D9\u05DC\u05D9\u05D5\u05DF \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9 (\u05E2\u05D3 ${MAX_ROWS} \u05E9\u05D5\u05E8\u05D5\u05EA)`);
+    const rowNum = Number(attr(rowMatch[1], "r")) || rows.length + 1;
+    const row = [];
+    for (const c of (rowMatch[2] ?? "").matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      const type = attr(c[1], "t");
+      const body = c[2] ?? "";
+      const v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1];
+      let value;
+      if (type === "inlineStr") value = texts(body);
+      else if (type === "s") value = shared[Number(v)] ?? "";
+      else value = v === void 0 ? "" : decodeXml(v);
+      const ref = attr(c[1], "r");
+      row[ref ? columnIndex(ref) : row.length] = value;
+    }
+    rows[rowNum - 1] = Array.from(row, (v) => (v ?? "").trim());
+  }
+  return Array.from(rows, (r) => r ?? []);
+}
+function readXlsx(data) {
+  const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  if (buf.length < 22 || buf.readUInt32LE(0) !== 67324752) fail2("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D0\u05D9\u05E0\u05D5 \u05E7\u05D5\u05D1\u05E5 Excel (xlsx). \u05E9\u05DE\u05E8\u05D5 \u05D0\u05D5\u05EA\u05D5 \u05D1-Excel \u05D1\u05E4\u05D5\u05E8\u05DE\u05D8 .xlsx \u05D5\u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.");
+  const zip = unzip(buf);
+  const read = (name) => zip.get(name)?.().toString("utf8");
+  const workbook = read("xl/workbook.xml") ?? fail2("\u05D4\u05E7\u05D5\u05D1\u05E5 \u05D0\u05D9\u05E0\u05D5 \u05E7\u05D5\u05D1\u05E5 Excel \u05EA\u05E7\u05D9\u05DF (\u05D7\u05E1\u05E8 workbook)");
+  const rels = read("xl/_rels/workbook.xml.rels") ?? "";
+  const targets = /* @__PURE__ */ new Map();
+  for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) {
+    const id = attr(m[0], "Id");
+    const target = attr(m[0], "Target");
+    if (id && target) targets.set(id, target.startsWith("/") ? target.slice(1) : `xl/${target}`);
+  }
+  const sharedXml = read("xl/sharedStrings.xml");
+  const shared = sharedXml ? [...sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => texts(m[1])) : [];
+  const sheets = /* @__PURE__ */ new Map();
+  for (const m of workbook.matchAll(/<sheet\b[^>]*>/g)) {
+    const name = decodeXml(attr(m[0], "name") ?? "");
+    const target = targets.get(attr(m[0], "r:id") ?? "");
+    const xml = target ? read(target) : void 0;
+    if (name && xml) sheets.set(name.trim(), parseSheet(xml, shared));
+  }
+  return sheets;
+}
+
+// server/bl/services/referenceFile.ts
+var SHEET_NAMES = {
+  catalog: "\u05E7\u05D8\u05DC\u05D5\u05D2 \u05E8\u05DB\u05D1\u05D9\u05DD",
+  occupations: "\u05E2\u05D9\u05E1\u05D5\u05E7\u05D9\u05DD",
+  employees: "\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4"
+};
+var CAR_GROUPS = ["\u05D0", "\u05D1", "\u05D2", "\u05D3", "\u05DE\u05E9\u05E4\u05D7\u05EA\u05D9"];
+var EMPLOYEE_GROUPS = ["\u05D0", "\u05D1", "\u05D2", "\u05D3"];
+var DRIVE_CODES = { \u05D1\u05E0\u05D6\u05D9\u05DF: 0, \u05D4\u05D9\u05D1\u05E8\u05D9\u05D3\u05D9: 1, "\u05E4\u05DC\u05D0\u05D2-\u05D0\u05D9\u05DF": 2, \u05D7\u05E9\u05DE\u05DC\u05D9: 3 };
+var NO_CAR_NAME = "\u05DC\u05DC\u05D0 \u05E8\u05DB\u05D1 (\u05D5\u05D9\u05EA\u05D5\u05E8)";
+var REQUIRED_CARS = {
+  "CAR-19": "\u05D1\u05E8\u05D9\u05E8\u05EA \u05D4\u05DE\u05D7\u05D3\u05DC \u05D1\u05DE\u05E1\u05DC\u05D5\u05DC \u05D4\u05DE\u05E9\u05E4\u05D7\u05EA\u05D9",
+  "CAR-10": "\u05D1\u05E8\u05D9\u05E8\u05EA \u05D4\u05DE\u05D7\u05D3\u05DC \u05DC\u05E8\u05DB\u05D1 \u05D7\u05E9\u05DE\u05DC\u05D9"
+};
+var normHeader = (h) => h.replace(/\([^)]*\)/g, "").replace(/[״"]/g, '"').replace(/\s+/g, " ").trim();
+function columns(header, fields, errors) {
+  const heads = header.map(normHeader);
+  const out = {};
+  const missing = [];
+  for (const [field, name] of Object.entries(fields)) {
+    let i = heads.indexOf(name);
+    if (i < 0) i = heads.findIndex((h) => h.startsWith(name));
+    if (i < 0) missing.push(name);
+    out[field] = i;
+  }
+  if (missing.length) {
+    errors.push(`\u05D7\u05E1\u05E8\u05D5\u05EA \u05E2\u05DE\u05D5\u05D3\u05D5\u05EA: ${missing.join(", ")}`);
+    return null;
+  }
+  return out;
+}
+var dataRows = (rows) => rows.slice(1).map((cells, i) => ({ cells, line: i + 2 })).filter((r) => r.cells.some((c) => c !== ""));
+var RowReader = class {
+  constructor(cells, line, errors) {
+    this.cells = cells;
+    this.line = line;
+    this.errors = errors;
+  }
+  error(name, message) {
+    this.errors.push(`\u05E9\u05D5\u05E8\u05D4 ${this.line}, ${name}: ${message}`);
+  }
+  text(col, name, required = true) {
+    const v = (this.cells[col] ?? "").trim();
+    if (required && !v) this.error(name, "\u05D7\u05E1\u05E8 \u05E2\u05E8\u05DA");
+    return v;
+  }
+  number(col, name, min, max) {
+    const raw = (this.cells[col] ?? "").replace(/[,₪%\s]/g, "");
+    const n = Number(raw);
+    if (raw === "" || !Number.isFinite(n)) {
+      this.error(name, raw === "" ? "\u05D7\u05E1\u05E8 \u05E2\u05E8\u05DA" : `"${this.cells[col]}" \u05D0\u05D9\u05E0\u05D5 \u05DE\u05E1\u05E4\u05E8`);
+      return 0;
+    }
+    if (n < min || n > max) this.error(name, `${n} \u05DE\u05D7\u05D5\u05E5 \u05DC\u05D8\u05D5\u05D5\u05D7 (${min}\u2013${max})`);
+    return n;
+  }
+  /** Product and model codes keep their leading zeros (Excel may drop them) */
+  code(col, name) {
+    const v = this.text(col, name);
+    if (v && !/^\d{1,5}$/.test(v)) this.error(name, `"${v}" \u05D0\u05D9\u05E0\u05D5 \u05E7\u05D5\u05D3 \u05DE\u05E1\u05E4\u05E8\u05D9`);
+    return v.padStart(5, "0");
+  }
+  yesNo(col, name) {
+    const v = this.text(col, name);
+    if (v === "\u05DB\u05DF") return true;
+    if (v !== "\u05DC\u05D0" && v) this.error(name, `"${v}": \u05D9\u05E9 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05DB\u05DF \u05D0\u05D5 \u05DC\u05D0`);
+    return false;
+  }
+  oneOf(col, name, allowed) {
+    const v = this.text(col, name).replace(/['׳]/g, "");
+    if (v && !allowed.includes(v)) this.error(name, `"${v}" \u05D0\u05D9\u05E0\u05D5 \u05D0\u05D7\u05D3 \u05DE: ${allowed.join(", ")}`);
+    return v;
+  }
+};
+function duplicates(keys) {
+  const seen = /* @__PURE__ */ new Set();
+  return [...new Set(keys.filter((k) => seen.size === seen.add(k).size))];
+}
+function parseCatalogSheet(rows) {
+  const errors = [];
+  const warnings = [];
+  const col = columns(rows[0] ?? [], {
+    id: "\u05DE\u05D6\u05D4\u05D4",
+    group: "\u05E7\u05D1\u05D5\u05E6\u05D4",
+    make: "\u05EA\u05D5\u05E6\u05E8",
+    productCode: "\u05E7\u05D5\u05D3 \u05EA\u05D5\u05E6\u05E8",
+    model: "\u05D3\u05D2\u05DD",
+    modelCode: "\u05E7\u05D5\u05D3 \u05D3\u05D2\u05DD",
+    description: "\u05EA\u05D0\u05D5\u05E8 \u05D3\u05D2\u05DD",
+    year: "\u05E9\u05E0\u05EA \u05E8\u05D9\u05E9\u05D5\u05DD",
+    fuel: "\u05D4\u05E0\u05E2\u05D4",
+    listPrice: "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D7\u05D9\u05E8\u05D5\u05DF",
+    benefit: "\u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9",
+    companyCost: "\u05E2\u05DC\u05D5\u05EA \u05D7\u05D5\u05D3\u05E9\u05D9\u05EA",
+    participation: "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA"
+  }, errors);
+  const cars = [];
+  if (col) {
+    for (const { cells, line } of dataRows(rows)) {
+      const r = new RowReader(cells, line, errors);
+      const fuel = r.oneOf(col.fuel, "\u05D4\u05E0\u05E2\u05D4", Object.keys(DRIVE_CODES));
+      cars.push({
+        id: r.text(col.id, "\u05DE\u05D6\u05D4\u05D4"),
+        group: r.oneOf(col.group, "\u05E7\u05D1\u05D5\u05E6\u05D4", CAR_GROUPS),
+        make: r.text(col.make, "\u05EA\u05D5\u05E6\u05E8"),
+        model: r.text(col.model, "\u05D3\u05D2\u05DD"),
+        productCode: r.code(col.productCode, "\u05E7\u05D5\u05D3 \u05EA\u05D5\u05E6\u05E8"),
+        modelCode: r.code(col.modelCode, "\u05E7\u05D5\u05D3 \u05D3\u05D2\u05DD"),
+        description: r.text(col.description, "\u05EA\u05D0\u05D5\u05E8 \u05D3\u05D2\u05DD", false),
+        year: r.number(col.year, "\u05E9\u05E0\u05EA \u05E8\u05D9\u05E9\u05D5\u05DD", 1990, 2100),
+        fuel,
+        driveCode: DRIVE_CODES[fuel] ?? 0,
+        listPrice: r.number(col.listPrice, "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D7\u05D9\u05E8\u05D5\u05DF", 0, 1e7),
+        benefit: r.number(col.benefit, "\u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9", 1, 1e5),
+        companyCost: r.number(col.companyCost, "\u05E2\u05DC\u05D5\u05EA \u05D7\u05D5\u05D3\u05E9\u05D9\u05EA \u05DC\u05D7\u05D1\u05E8\u05D4", 0, 1e5),
+        participation: r.number(col.participation, "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05E2\u05D5\u05D1\u05D3", 0, 1e5)
+      });
+    }
+    if (!cars.length) errors.push("\u05D4\u05D2\u05D9\u05DC\u05D9\u05D5\u05DF \u05E8\u05D9\u05E7");
+    for (const id of duplicates(cars.map((c) => c.id))) errors.push(`\u05D4\u05DE\u05D6\u05D4\u05D4 ${id} \u05DE\u05D5\u05E4\u05D9\u05E2 \u05D9\u05D5\u05EA\u05E8 \u05DE\u05E4\u05E2\u05DD \u05D0\u05D7\u05EA`);
+    for (const g of ["\u05D0", "\u05D1", "\u05D2", "\u05D3"]) {
+      if (cars.length && !cars.some((c) => c.group === g)) warnings.push(`\u05D0\u05D9\u05DF \u05E8\u05DB\u05D1 \u05D1\u05E7\u05D1\u05D5\u05E6\u05D4 ${g}: \u05E2\u05D5\u05D1\u05D3\u05D9 \u05D4\u05E7\u05D1\u05D5\u05E6\u05D4 \u05D9\u05D5\u05DB\u05DC\u05D5 \u05DC\u05D1\u05D7\u05D5\u05E8 \u05E8\u05E7 \u05DE\u05E7\u05D1\u05D5\u05E6\u05D5\u05EA \u05E0\u05DE\u05D5\u05DB\u05D5\u05EA \u05D9\u05D5\u05EA\u05E8`);
+    }
+    if (cars.length && !cars.some((c) => c.group === "\u05DE\u05E9\u05E4\u05D7\u05EA\u05D9")) warnings.push("\u05D0\u05D9\u05DF \u05E8\u05DB\u05D1 \u05D1\u05DE\u05E1\u05DC\u05D5\u05DC \u05D4\u05DE\u05E9\u05E4\u05D7\u05EA\u05D9");
+    for (const [id, role] of Object.entries(REQUIRED_CARS)) {
+      if (cars.length && !cars.some((c) => c.id === id)) errors.push(`\u05D7\u05E1\u05E8 \u05D4\u05E8\u05DB\u05D1 ${id} (${role}); \u05D4\u05DE\u05D7\u05E9\u05D1\u05D5\u05DF \u05E0\u05E9\u05E2\u05DF \u05E2\u05DC\u05D9\u05D5`);
+    }
+  }
+  return { kind: "catalog", sheet: SHEET_NAMES.catalog, rows: cars, errors, warnings };
+}
+function parseOccupationsSheet(rows) {
+  const errors = [];
+  const col = columns(rows[0] ?? [], {
+    occupation: "\u05E2\u05D9\u05E1\u05D5\u05E7",
+    group: "\u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA",
+    carMandatory: "\u05E8\u05DB\u05D1 \u05D7\u05D5\u05D1\u05D4",
+    canWaive: "\u05DE\u05D5\u05EA\u05E8 \u05DC\u05D5\u05D5\u05EA\u05E8",
+    maintenance: "\u05D0\u05D7\u05D6\u05E7\u05EA \u05E8\u05DB\u05D1"
+  }, errors);
+  const list2 = [];
+  if (col) {
+    for (const { cells, line } of dataRows(rows)) {
+      const r = new RowReader(cells, line, errors);
+      const occ = {
+        occupation: r.text(col.occupation, "\u05E2\u05D9\u05E1\u05D5\u05E7"),
+        group: r.oneOf(col.group, "\u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA", EMPLOYEE_GROUPS),
+        carMandatory: r.yesNo(col.carMandatory, "\u05E8\u05DB\u05D1 \u05D7\u05D5\u05D1\u05D4"),
+        canWaive: r.yesNo(col.canWaive, "\u05DE\u05D5\u05EA\u05E8 \u05DC\u05D5\u05D5\u05EA\u05E8"),
+        maintenance: r.number(col.maintenance, "\u05D0\u05D7\u05D6\u05E7\u05EA \u05E8\u05DB\u05D1", 0, 1e5)
+      };
+      if (occ.carMandatory && occ.canWaive) errors.push(`\u05E9\u05D5\u05E8\u05D4 ${line}: \u05E2\u05D9\u05E1\u05D5\u05E7 \u05E2\u05DD \u05E8\u05DB\u05D1 \u05D7\u05D5\u05D1\u05D4 \u05DC\u05D0 \u05D9\u05DB\u05D5\u05DC \u05DC\u05D4\u05D9\u05D5\u05EA "\u05DE\u05D5\u05EA\u05E8 \u05DC\u05D5\u05D5\u05EA\u05E8"`);
+      if (occ.canWaive && occ.maintenance <= 0) errors.push(`\u05E9\u05D5\u05E8\u05D4 ${line}: \u05DE\u05D5\u05EA\u05E8 \u05DC\u05D5\u05D5\u05EA\u05E8 \u05D0\u05D1\u05DC \u05D0\u05D7\u05D6\u05E7\u05EA \u05D4\u05E8\u05DB\u05D1 \u05D4\u05D9\u05D0 0`);
+      list2.push(occ);
+    }
+    if (!list2.length) errors.push("\u05D4\u05D2\u05D9\u05DC\u05D9\u05D5\u05DF \u05E8\u05D9\u05E7");
+    for (const name of duplicates(list2.map((o) => o.occupation))) errors.push(`\u05D4\u05E2\u05D9\u05E1\u05D5\u05E7 "${name}" \u05DE\u05D5\u05E4\u05D9\u05E2 \u05D9\u05D5\u05EA\u05E8 \u05DE\u05E4\u05E2\u05DD \u05D0\u05D7\u05EA`);
+  }
+  return { kind: "occupations", sheet: SHEET_NAMES.occupations, rows: list2, errors, warnings: [] };
+}
+function parseEmployeesSheet(rows, catalog, occupations) {
+  const errors = [];
+  const warnings = [];
+  const col = columns(rows[0] ?? [], {
+    id: "\u05DE\u05D6\u05D4\u05D4",
+    name: "\u05E9\u05DD",
+    occupation: "\u05E2\u05D9\u05E1\u05D5\u05E7",
+    group: "\u05E7\u05D1\u05D5\u05E6\u05D4",
+    base: "\u05E9\u05DB\u05E8 \u05D1\u05E1\u05D9\u05E1",
+    commissions: "\u05E2\u05DE\u05DC\u05D5\u05EA",
+    bonus: "\u05D1\u05D5\u05E0\u05D5\u05E1",
+    pensionPct: "\u05E4\u05E0\u05E1\u05D9\u05D4 \u05E2\u05D5\u05D1\u05D3",
+    studyFundPct: "\u05E7\u05E8\u05DF \u05D4\u05E9\u05EA\u05DC\u05DE\u05D5\u05EA",
+    creditPoints: "\u05E0\u05E7\u05D5\u05D3\u05D5\u05EA \u05D6\u05D9\u05DB\u05D5\u05D9",
+    children: "\u05D9\u05DC\u05D3\u05D9\u05DD",
+    car: "\u05E8\u05DB\u05D1 \u05D4\u05D9\u05D5\u05DD",
+    participation: "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD"
+  }, errors);
+  const list2 = [];
+  if (col) {
+    for (const { cells, line } of dataRows(rows)) {
+      const r = new RowReader(cells, line, errors);
+      const carText = r.text(col.car, "\u05E8\u05DB\u05D1 \u05D4\u05D9\u05D5\u05DD");
+      const noCar = /^(אין|ללא)/.test(carText);
+      const car = noCar ? void 0 : catalog.find((c) => c.id.toLowerCase() === carText.toLowerCase() || c.model.toLowerCase() === carText.toLowerCase());
+      if (carText && !noCar && !car) errors.push(`\u05E9\u05D5\u05E8\u05D4 ${line}, \u05E8\u05DB\u05D1 \u05D4\u05D9\u05D5\u05DD: "${carText}" \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05D1\u05E7\u05D8\u05DC\u05D5\u05D2 \u05D4\u05E8\u05DB\u05D1\u05D9\u05DD`);
+      const maintenance = noCar ? Number(carText.replace(/,/g, "").match(/\d+(\.\d+)?/)?.[0] ?? 0) : 0;
+      const occupation = r.text(col.occupation, "\u05E2\u05D9\u05E1\u05D5\u05E7");
+      if (occupation && !occupations.some((o) => o.occupation === occupation)) {
+        warnings.push(`\u05E9\u05D5\u05E8\u05D4 ${line}: \u05D4\u05E2\u05D9\u05E1\u05D5\u05E7 "${occupation}" \u05D0\u05D9\u05E0\u05D5 \u05D1\u05D8\u05D1\u05DC\u05EA \u05D4\u05E2\u05D9\u05E1\u05D5\u05E7\u05D9\u05DD`);
+      }
+      list2.push({
+        id: r.text(col.id, "\u05DE\u05D6\u05D4\u05D4"),
+        name: r.text(col.name, "\u05E9\u05DD"),
+        occupation,
+        group: r.oneOf(col.group, "\u05E7\u05D1\u05D5\u05E6\u05D4", EMPLOYEE_GROUPS),
+        base: r.number(col.base, "\u05E9\u05DB\u05E8 \u05D1\u05E1\u05D9\u05E1", 0, 1e6),
+        commissions: r.number(col.commissions, "\u05E2\u05DE\u05DC\u05D5\u05EA", 0, 1e6),
+        bonus: r.number(col.bonus, "\u05D1\u05D5\u05E0\u05D5\u05E1", 0, 1e6),
+        pensionPct: r.number(col.pensionPct, "\u05E4\u05E0\u05E1\u05D9\u05D4 \u05E2\u05D5\u05D1\u05D3 %", 0, 100),
+        studyFundPct: r.number(col.studyFundPct, "\u05E7\u05E8\u05DF \u05D4\u05E9\u05EA\u05DC\u05DE\u05D5\u05EA %", 0, 100),
+        creditPoints: r.number(col.creditPoints, "\u05E0\u05E7\u05D5\u05D3\u05D5\u05EA \u05D6\u05D9\u05DB\u05D5\u05D9", 0, 30),
+        childrenUpTo23: r.number(col.children, "\u05D9\u05DC\u05D3\u05D9\u05DD \u05E2\u05D3 23", 0, 30),
+        hasCar: Boolean(car),
+        currentCarId: car?.id ?? null,
+        currentCarName: car?.model ?? NO_CAR_NAME,
+        currentParticipation: car ? r.number(col.participation, "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD", 0, 1e5) : 0,
+        currentBenefit: car?.benefit ?? 0,
+        currentMaintenance: maintenance
+      });
+    }
+    if (!list2.length) errors.push("\u05D4\u05D2\u05D9\u05DC\u05D9\u05D5\u05DF \u05E8\u05D9\u05E7");
+    for (const id of duplicates(list2.map((e) => e.id))) errors.push(`\u05D4\u05DE\u05D6\u05D4\u05D4 ${id} \u05DE\u05D5\u05E4\u05D9\u05E2 \u05D9\u05D5\u05EA\u05E8 \u05DE\u05E4\u05E2\u05DD \u05D0\u05D7\u05EA`);
+  }
+  return { kind: "employees", sheet: SHEET_NAMES.employees, rows: list2, errors, warnings };
+}
+function parseDataWorkbook(data, active2) {
+  const sheets = readXlsx(data);
+  const out = {};
+  const catalogRows = sheets.get(SHEET_NAMES.catalog);
+  const occupationRows = sheets.get(SHEET_NAMES.occupations);
+  const employeeRows = sheets.get(SHEET_NAMES.employees);
+  if (catalogRows) out.catalog = parseCatalogSheet(catalogRows);
+  if (occupationRows) out.occupations = parseOccupationsSheet(occupationRows);
+  if (employeeRows) {
+    const catalog = out.catalog && !out.catalog.errors.length ? out.catalog.rows : active2.catalog;
+    const occupations = out.occupations && !out.occupations.errors.length ? out.occupations.rows : active2.occupations;
+    out.employees = parseEmployeesSheet(employeeRows, catalog, occupations);
+  }
+  return out;
 }
 
 // server/bl/services/taxCsv.ts
@@ -3943,26 +4370,214 @@ var InvalidRulesError = class extends Error {
     this.status = 400;
   }
 };
+var InvalidDataError = class extends Error {
+  constructor() {
+    super(...arguments);
+    this.status = 400;
+  }
+};
 function assertRulesShape(r) {
   const ok = r && typeof r === "object" && r.budgets && typeof r.budgets === "object" && Array.isArray(r.groupOrder) && r.netMethod && Array.isArray(r.netMethod.brackets) && typeof r.netMethod.creditPointValue === "number" && r.netMethod.nationalInsurance && r.netMethod.health && r.netMethod.pensionCredit;
   if (!ok) throw new InvalidRulesError("\u05E7\u05D5\u05D1\u05E5 \u05D4\u05DB\u05DC\u05DC\u05D9\u05DD \u05D7\u05E1\u05E8 \u05E9\u05D3\u05D5\u05EA \u05D7\u05D5\u05D1\u05D4 (budgets, groupOrder, netMethod)");
 }
-function createAdminService(repo) {
+var ROW_KEY = {
+  catalog: (c) => c.id,
+  occupations: (o) => o.occupation,
+  employees: (e) => e.id ?? ""
+};
+var ROW_NAME = {
+  catalog: (c) => `${c.id} \xB7 ${c.model}`,
+  occupations: (o) => o.occupation,
+  employees: (e) => `${e.id} \xB7 ${e.name ?? ""}`
+};
+var FIELD_LABELS = {
+  group: "\u05E7\u05D1\u05D5\u05E6\u05D4",
+  make: "\u05EA\u05D5\u05E6\u05E8",
+  model: "\u05D3\u05D2\u05DD",
+  productCode: "\u05E7\u05D5\u05D3 \u05EA\u05D5\u05E6\u05E8",
+  modelCode: "\u05E7\u05D5\u05D3 \u05D3\u05D2\u05DD",
+  description: "\u05EA\u05D0\u05D5\u05E8 \u05D3\u05D2\u05DD",
+  year: "\u05E9\u05E0\u05EA \u05E8\u05D9\u05E9\u05D5\u05DD",
+  fuel: "\u05D4\u05E0\u05E2\u05D4",
+  driveCode: "\u05E7\u05D5\u05D3 \u05D4\u05E0\u05E2\u05D4",
+  listPrice: "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D7\u05D9\u05E8\u05D5\u05DF",
+  benefit: "\u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9",
+  companyCost: "\u05E2\u05DC\u05D5\u05EA \u05D7\u05D5\u05D3\u05E9\u05D9\u05EA \u05DC\u05D7\u05D1\u05E8\u05D4",
+  participation: "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05E2\u05D5\u05D1\u05D3",
+  occupation: "\u05E2\u05D9\u05E1\u05D5\u05E7",
+  carMandatory: "\u05E8\u05DB\u05D1 \u05D7\u05D5\u05D1\u05D4",
+  canWaive: "\u05DE\u05D5\u05EA\u05E8 \u05DC\u05D5\u05D5\u05EA\u05E8",
+  maintenance: "\u05D0\u05D7\u05D6\u05E7\u05EA \u05E8\u05DB\u05D1",
+  name: "\u05E9\u05DD",
+  base: "\u05E9\u05DB\u05E8 \u05D1\u05E1\u05D9\u05E1",
+  commissions: "\u05E2\u05DE\u05DC\u05D5\u05EA",
+  bonus: "\u05D1\u05D5\u05E0\u05D5\u05E1",
+  pensionPct: "\u05E4\u05E0\u05E1\u05D9\u05D4 \u05E2\u05D5\u05D1\u05D3 %",
+  studyFundPct: "\u05E7\u05E8\u05DF \u05D4\u05E9\u05EA\u05DC\u05DE\u05D5\u05EA %",
+  creditPoints: "\u05E0\u05E7\u05D5\u05D3\u05D5\u05EA \u05D6\u05D9\u05DB\u05D5\u05D9",
+  childrenUpTo23: "\u05D9\u05DC\u05D3\u05D9\u05DD \u05E2\u05D3 23",
+  hasCar: "\u05D9\u05E9 \u05E8\u05DB\u05D1",
+  currentCarId: "\u05E8\u05DB\u05D1 \u05D4\u05D9\u05D5\u05DD",
+  currentCarName: "\u05E9\u05DD \u05D4\u05E8\u05DB\u05D1 \u05D4\u05D9\u05D5\u05DD",
+  currentParticipation: "\u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD",
+  currentBenefit: "\u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 \u05D4\u05D9\u05D5\u05DD",
+  currentMaintenance: "\u05D0\u05D7\u05D6\u05E7\u05D4 \u05D4\u05D9\u05D5\u05DD"
+};
+var RULE_LABELS = {
+  version: "\u05D2\u05E8\u05E1\u05D4",
+  budgets: "\u05EA\u05E7\u05E6\u05D9\u05D1 \u05E7\u05D1\u05D5\u05E6\u05D4",
+  groupOrder: "\u05E1\u05D3\u05E8 \u05D4\u05E7\u05D1\u05D5\u05E6\u05D5\u05EA",
+  chooseFrom: "\u05D1\u05D7\u05D9\u05E8\u05EA \u05E8\u05DB\u05D1",
+  "electric.netBonus": "\u05D4\u05D7\u05D6\u05E8 \u05D7\u05E9\u05DE\u05DC \u05E0\u05D8\u05D5",
+  "electric.method": "\u05E9\u05D9\u05D8\u05EA \u05D4\u05D7\u05D6\u05E8 \u05D4\u05D7\u05E9\u05DE\u05DC",
+  "familyTrack.minChildren": "\u05DE\u05E1\u05DC\u05D5\u05DC \u05DE\u05E9\u05E4\u05D7\u05EA\u05D9: \u05DE\u05D9\u05E0\u05D9\u05DE\u05D5\u05DD \u05D9\u05DC\u05D3\u05D9\u05DD",
+  "familyTrack.childMaxAge": "\u05DE\u05E1\u05DC\u05D5\u05DC \u05DE\u05E9\u05E4\u05D7\u05EA\u05D9: \u05D2\u05D9\u05DC \u05D9\u05DC\u05D3 \u05DE\u05E8\u05D1\u05D9",
+  "familyTrack.carPrice": "\u05DE\u05E1\u05DC\u05D5\u05DC \u05DE\u05E9\u05E4\u05D7\u05EA\u05D9: \u05DE\u05D7\u05D9\u05E8 \u05E8\u05DB\u05D1",
+  "familyTrack.gapSplitEmployee": "\u05DE\u05E1\u05DC\u05D5\u05DC \u05DE\u05E9\u05E4\u05D7\u05EA\u05D9: \u05D7\u05DC\u05E7 \u05D4\u05E2\u05D5\u05D1\u05D3 \u05D1\u05E4\u05E2\u05E8",
+  "netMethod.taxYear": "\u05E9\u05E0\u05EA \u05DE\u05E1",
+  "netMethod.creditPointValue": "\u05E2\u05E8\u05DA \u05E0\u05E7\u05D5\u05D3\u05EA \u05D6\u05D9\u05DB\u05D5\u05D9",
+  "netMethod.brackets": "\u05DE\u05D3\u05E8\u05D2\u05D5\u05EA \u05DE\u05E1",
+  "netMethod.nationalInsurance": "\u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9",
+  "netMethod.health": "\u05DE\u05E1 \u05D1\u05E8\u05D9\u05D0\u05D5\u05EA",
+  "netMethod.pensionCredit": "\u05D6\u05D9\u05DB\u05D5\u05D9 \u05E4\u05E0\u05E1\u05D9\u05D4"
+};
+var show = (v) => v === void 0 || v === null ? "\u2014" : typeof v === "boolean" ? v ? "\u05DB\u05DF" : "\u05DC\u05D0" : typeof v === "object" ? JSON.stringify(v) : String(v);
+function diffTable(kind, before, after) {
+  const key = ROW_KEY[kind];
+  const name = ROW_NAME[kind];
+  const old = new Map(before.map((r) => [key(r), r]));
+  const next = new Set(after.map(key));
+  const diff = { added: [], removed: [], changed: [], unchanged: 0 };
+  for (const row of after) {
+    const prev = old.get(key(row));
+    if (!prev) {
+      diff.added.push(name(row));
+      continue;
+    }
+    const changes = [];
+    for (const field of /* @__PURE__ */ new Set([...Object.keys(prev), ...Object.keys(row)])) {
+      if (field === "driveCode" || field === "currentCarName") continue;
+      if (JSON.stringify(prev[field]) !== JSON.stringify(row[field])) {
+        changes.push({ field: FIELD_LABELS[field] ?? field, before: show(prev[field]), after: show(row[field]) });
+      }
+    }
+    if (changes.length) diff.changed.push({ row: name(row), changes });
+    else diff.unchanged++;
+  }
+  for (const row of before) if (!next.has(key(row))) diff.removed.push(name(row));
+  return diff;
+}
+function flatten(v, prefix = "", out = {}) {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    for (const [k, child] of Object.entries(v)) if (k !== "note") flatten(child, prefix ? `${prefix}.${k}` : k, out);
+  } else {
+    out[prefix] = v;
+  }
+  return out;
+}
+function ruleLabel(path4) {
+  if (RULE_LABELS[path4]) return RULE_LABELS[path4];
+  const parent = Object.keys(RULE_LABELS).filter((p) => path4.startsWith(`${p}.`)).sort((a, b) => b.length - a.length)[0];
+  return parent ? `${RULE_LABELS[parent]} ${path4.slice(parent.length + 1)}` : path4;
+}
+function activeTable(kind) {
+  const active2 = { catalog: getCatalog(), occupations: getOccupations(), employees: getEmployees() };
+  return active2[kind];
+}
+var SYNC_MS = 3e4;
+function createAdminService(repo, now = Date.now) {
+  let syncedAt = 0;
+  let syncing = null;
+  async function loadFromStorage() {
+    const [rules, ...tables] = await Promise.all([repo.getRules(), ...REFERENCE_KINDS.map((k) => repo.getReferenceData(k))]);
+    if (rules) setRules(rules);
+    else resetRules();
+    REFERENCE_KINDS.forEach((kind, i) => {
+      const rows = tables[i];
+      if (rows) setReferenceData(kind, rows);
+      else resetReferenceData(kind);
+    });
+    syncedAt = now();
+  }
+  function parse(file) {
+    return parseDataWorkbook(file, { catalog: getCatalog(), occupations: getOccupations() });
+  }
+  function previewOf(parsed) {
+    const tables = [];
+    for (const kind of REFERENCE_KINDS) {
+      const sheet = parsed[kind];
+      if (!sheet) continue;
+      const before = activeTable(kind);
+      tables.push({
+        kind,
+        sheet: sheet.sheet,
+        count: sheet.rows.length,
+        previousCount: before.length,
+        errors: sheet.errors,
+        warnings: [...sheet.warnings],
+        diff: diffTable(kind, before, sheet.rows)
+      });
+    }
+    const newCatalog = parsed.catalog?.rows;
+    const catalogTable = tables.find((t) => t.kind === "catalog");
+    if (newCatalog && catalogTable && !parsed.employees) {
+      const missing = getEmployees().filter((e) => e.currentCarId && !newCatalog.some((c) => c.id === e.currentCarId));
+      if (missing.length) {
+        catalogTable.warnings.push(`\u05DC\u05E2\u05D5\u05D1\u05D3\u05D9 \u05D4\u05D3\u05D5\u05D2\u05DE\u05D4 ${missing.map((e) => e.name).join(", ")} \u05D9\u05E9 \u05E8\u05DB\u05D1 \u05E9\u05D0\u05D9\u05E0\u05D5 \u05D1\u05E7\u05D8\u05DC\u05D5\u05D2 \u05D4\u05D7\u05D3\u05E9`);
+      }
+    }
+    return { tables, canApply: tables.length > 0 && tables.every((t) => t.errors.length === 0) };
+  }
   return {
-    /** Applies the saved rules override at startup (the engine reads rules from memory) */
     async init() {
-      const saved = await repo.getRules();
-      if (saved) setRules(saved);
+      await loadFromStorage();
+    },
+    /**
+     * Reloads the saved data when it is older than SYNC_MS, so an upload on one instance reaches the
+     * others. A storage error keeps the data already in memory.
+     */
+    async syncIfStale() {
+      if (now() - syncedAt < SYNC_MS) return;
+      syncing ??= loadFromStorage().catch((err) => console.error(`[admin] reloading settings failed: ${err?.name ?? "Error"}`)).finally(() => {
+        syncing = null;
+      });
+      await syncing;
     },
     async overview() {
+      const [rules, ...tables] = await Promise.all([repo.getRules(), ...REFERENCE_KINDS.map((k) => repo.getReferenceData(k))]);
+      const source = (v) => v ? "uploaded" : "default";
       return {
         rules: getRules(),
-        catalog: catalog_default,
-        occupations: occupations_default,
-        employees: employees_default,
+        catalog: getCatalog(),
+        occupations: getOccupations(),
+        employees: getEmployees(),
         taxRecordCount: await repo.countTaxRecords(),
-        storage: repo.kind
+        storage: repo.kind,
+        sources: {
+          rules: source(rules),
+          catalog: source(tables[0]),
+          occupations: source(tables[1]),
+          employees: source(tables[2])
+        }
       };
+    },
+    /** Checks an uploaded rules file and lists what would change; saves nothing */
+    previewRules(rules) {
+      const current = getRules();
+      try {
+        assertRulesShape(rules);
+      } catch (err) {
+        return { version: "", previousVersion: current.version, changes: [], errors: [err.message] };
+      }
+      const before = flatten(current);
+      const after = flatten(rules);
+      const changes = [];
+      for (const path4 of new Set([...Object.keys(before), ...Object.keys(after)].filter((p) => p !== "version"))) {
+        if (JSON.stringify(before[path4]) !== JSON.stringify(after[path4])) {
+          changes.push({ field: ruleLabel(path4), before: show(before[path4]), after: show(after[path4]) });
+        }
+      }
+      return { version: String(rules.version ?? ""), previousVersion: current.version, changes, errors: [] };
     },
     async saveRules(rules) {
       assertRulesShape(rules);
@@ -3974,6 +4589,31 @@ function createAdminService(repo) {
       resetRules();
       await repo.saveRules(null);
       return getRules();
+    },
+    /** Checks the sheets of an uploaded data workbook and lists what would change; saves nothing */
+    previewDataFile(file) {
+      return previewOf(parse(file));
+    },
+    /** Replaces every table found in the workbook, all or nothing (the same file the preview showed) */
+    async applyDataFile(file) {
+      const parsed = parse(file);
+      const preview = previewOf(parsed);
+      if (!preview.canApply) {
+        throw new InvalidDataError(
+          preview.tables.length ? "\u05D1\u05E7\u05D5\u05D1\u05E5 \u05D9\u05E9 \u05E9\u05D2\u05D9\u05D0\u05D5\u05EA: \u05EA\u05E7\u05E0\u05D5 \u05D0\u05D5\u05EA\u05DF \u05D5\u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1" : "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05D1\u05E7\u05D5\u05D1\u05E5 \u05D0\u05E3 \u05D2\u05D9\u05DC\u05D9\u05D5\u05DF \u05DE\u05D5\u05DB\u05E8 (\u05E7\u05D8\u05DC\u05D5\u05D2 \u05E8\u05DB\u05D1\u05D9\u05DD, \u05E2\u05D9\u05E1\u05D5\u05E7\u05D9\u05DD, \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4)"
+        );
+      }
+      for (const kind of REFERENCE_KINDS) {
+        const sheet = parsed[kind];
+        if (!sheet) continue;
+        await repo.saveReferenceData(kind, sheet.rows);
+        setReferenceData(kind, sheet.rows);
+      }
+      return preview;
+    },
+    async resetDataTable(kind) {
+      await repo.saveReferenceData(kind, null);
+      resetReferenceData(kind);
     },
     async importTaxCsv(buffer) {
       const records = parseTaxAuthorityCsv(buffer);
@@ -4052,6 +4692,21 @@ function createAuthService(gateway, repo, now = Date.now) {
     async logout(accessToken) {
       cache.delete(tokenKey(accessToken));
       await gateway.signOut(accessToken);
+    },
+    async createUser(email, password, role) {
+      const created = await gateway.createUser(email, password);
+      if (!created.ok) {
+        if (created.reason === "exists") throw new AuthError(409, "\u05DB\u05D1\u05E8 \u05E7\u05D9\u05D9\u05DD \u05DE\u05E9\u05EA\u05DE\u05E9 \u05E2\u05DD \u05D4\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC \u05D4\u05D6\u05D4");
+        if (created.reason === "weak_password") throw new AuthError(400, "\u05D4\u05E1\u05D9\u05E1\u05DE\u05D4 \u05D7\u05DC\u05E9\u05D4 \u05DE\u05D3\u05D9. \u05D1\u05D7\u05E8\u05D5 \u05E1\u05D9\u05E1\u05DE\u05D4 \u05D0\u05E8\u05D5\u05DB\u05D4 \u05D5\u05DE\u05D2\u05D5\u05D5\u05E0\u05EA \u05D9\u05D5\u05EA\u05E8.");
+        throw new AuthError(400, "\u05DC\u05D0 \u05E0\u05D9\u05EA\u05DF \u05DC\u05D9\u05E6\u05D5\u05E8 \u05DE\u05E9\u05EA\u05DE\u05E9 \u05E2\u05DD \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05D4\u05D0\u05DC\u05D4");
+      }
+      try {
+        await repo.setUserRole(created.user.id, role);
+      } catch (err) {
+        await gateway.deleteUser(created.user.id).catch(() => void 0);
+        throw err;
+      }
+      return { id: created.user.id, email: created.user.email, role };
     }
   };
 }
@@ -4198,6 +4853,17 @@ var FileRepository = class {
     (await this.app()).rules = rules ? structuredClone(rules) : null;
     await this.flush();
   }
+  async getReferenceData(kind) {
+    const rows = (await this.app()).reference?.[kind];
+    return rows ? structuredClone(rows) : null;
+  }
+  async saveReferenceData(kind, rows) {
+    const data = await this.app();
+    data.reference ??= {};
+    if (rows) data.reference[kind] = structuredClone(rows);
+    else delete data.reference[kind];
+    await this.flush();
+  }
   async saveTaxRecords(records) {
     const map = await this.taxMap();
     for (const r of records) map.set(r.key, r);
@@ -4213,6 +4879,9 @@ var FileRepository = class {
   // Users live in Supabase Auth only: the file store has none (login needs Supabase)
   async getUserRole(_userId) {
     return null;
+  }
+  async setUserRole(_userId, _role) {
+    throw new Error("Users need Supabase: the file store has no users");
   }
   async clearTaxRecords() {
     (await this.taxMap()).clear();
@@ -4263,6 +4932,31 @@ var SupabaseAuthGateway = class {
   }
   async signOut(accessToken) {
     await this.fetch("logout?scope=local", { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => void 0);
+  }
+  // The admin endpoints accept only the service role key as the bearer token
+  admin(pathAndQuery, init) {
+    return this.fetch(`admin/${pathAndQuery}`, { ...init, headers: { Authorization: `Bearer ${this.apiKey}` } });
+  }
+  async createUser(email, password) {
+    const res = await this.admin("users", { method: "POST", body: JSON.stringify({ email, password, email_confirm: true }) });
+    if (res.ok) {
+      const u = await res.json();
+      return { ok: true, user: { id: u.id, email: u.email ?? email } };
+    }
+    if (res.status === 400 || res.status === 409 || res.status === 422) {
+      const body = await res.json().catch(() => ({}));
+      const code = body.error_code ?? body.code ?? "";
+      if (code === "email_exists" || code === "user_already_exists" || /already been registered/i.test(body.msg ?? "")) {
+        return { ok: false, reason: "exists" };
+      }
+      if (code === "weak_password") return { ok: false, reason: "weak_password" };
+      return { ok: false, reason: "invalid" };
+    }
+    throw new Error(`Supabase Auth create user failed (${res.status})`);
+  }
+  async deleteUser(userId) {
+    const res = await this.admin(`users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 404) throw new Error(`Supabase Auth delete user failed (${res.status})`);
   }
 };
 
@@ -4410,6 +5104,17 @@ var SupabaseRepository = class {
     }
     await this.upsert("app_settings", { key: "rules", value: rules, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
+  async getReferenceData(kind) {
+    const [row] = await this.rows(`app_settings?key=eq.data:${kind}&select=value`);
+    return Array.isArray(row?.value) ? row.value : null;
+  }
+  async saveReferenceData(kind, rows) {
+    if (rows === null) {
+      await this.request(`app_settings?key=eq.data:${kind}`, { method: "DELETE" });
+      return;
+    }
+    await this.upsert("app_settings", { key: `data:${kind}`, value: rows, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  }
   async saveTaxRecords(records) {
     for (let i = 0; i < records.length; i += TAX_BATCH) {
       await this.upsert(
@@ -4460,6 +5165,9 @@ var SupabaseRepository = class {
   async getUserRole(userId) {
     const [row] = await this.rows(`app_users?user_id=eq.${encodeURIComponent(userId)}&select=role`);
     return row?.role ?? null;
+  }
+  async setUserRole(userId, role) {
+    await this.upsert("app_users", { user_id: userId, role });
   }
 };
 

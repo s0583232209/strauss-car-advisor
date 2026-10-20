@@ -21,6 +21,21 @@ import {
 import React, { useEffect, useState } from 'react';
 import type { AdminOverview, Rules, VehicleLookupResult } from '../../shared/types.ts';
 import { api, ApiError } from '../api/client.ts';
+import { DataUploadPanel } from './DataUploadPanel.tsx';
+
+const RulesCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+    <h4 className="font-bold text-slate-900 text-sm">{title}</h4>
+    <div className="space-y-1.5">{children}</div>
+  </div>
+);
+
+const RulesLine: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="flex justify-between gap-3 p-2 rounded bg-white border border-slate-100">
+    <span className="text-slate-600">{label}</span>
+    <span className="font-bold text-ink">{value}</span>
+  </div>
+);
 
 export const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -33,8 +48,6 @@ export const AdminView: React.FC = () => {
 
   // Rules state
   const [currentRules, setCurrentRules] = useState<Rules | null>(null);
-  const [rulesJsonString, setRulesJsonString] = useState<string>('');
-  const [rulesSavedMsg, setRulesSavedMsg] = useState<string | null>(null);
 
   // Tax Authority file (stored on the server)
   const [taxRowCount, setTaxRowCount] = useState<number>(0);
@@ -57,7 +70,6 @@ export const AdminView: React.FC = () => {
 
   const showRules = (r: Rules) => {
     setCurrentRules(r);
-    setRulesJsonString(JSON.stringify(r, null, 2));
   };
 
   const loadOverview = async () => {
@@ -85,36 +97,6 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  const flashRulesMsg = (msg: string) => {
-    setRulesSavedMsg(msg);
-    setTimeout(() => setRulesSavedMsg(null), 3000);
-  };
-
-  const handleSaveRules = async () => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(rulesJsonString);
-    } catch (err: any) {
-      alert(`שגיאה בתחביר ה-JSON: ${err?.message}`);
-      return;
-    }
-    try {
-      showRules(await api.admin.saveRules(parsed));
-      flashRulesMsg('הכללים נשמרו ועודכנו במנוע בהצלחה!');
-    } catch (err: any) {
-      if (err instanceof ApiError && err.status === 400) alert(err.message);
-      else handleApiError(err);
-    }
-  };
-
-  const handleResetRules = async () => {
-    try {
-      showRules(await api.admin.resetRules());
-      flashRulesMsg('הכללים אופסו לברירת המחדל.');
-    } catch (err) {
-      handleApiError(err);
-    }
-  };
 
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
@@ -181,7 +163,7 @@ export const AdminView: React.FC = () => {
           }`}
         >
           <FileJson className="w-4 h-4" />
-          <span>קובץ כללים (Rules JSON)</span>
+          <span>כללי חישוב</span>
         </button>
 
         <button
@@ -191,7 +173,7 @@ export const AdminView: React.FC = () => {
           }`}
         >
           <CarIcon className="w-4 h-4" />
-          <span>קטלוג רכבים (20)</span>
+          <span>קטלוג רכבים ({overview.catalog.length})</span>
         </button>
 
         <button
@@ -201,7 +183,7 @@ export const AdminView: React.FC = () => {
           }`}
         >
           <Briefcase className="w-4 h-4" />
-          <span>טבלת עיסוקים (14)</span>
+          <span>טבלת עיסוקים ({overview.occupations.length})</span>
         </button>
 
         <button
@@ -211,7 +193,7 @@ export const AdminView: React.FC = () => {
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>עובדי דוגמה (6)</span>
+          <span>עובדי דוגמה ({overview.employees.length})</span>
         </button>
 
         <button
@@ -248,40 +230,58 @@ export const AdminView: React.FC = () => {
       {/* Tab 2: Rules JSON */}
       {activeTab === 'rules' && (
         <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-ink">קובץ כללים ותקציבים (strauss-rules.json)</h3>
-              <p className="text-xs text-slate-500">עריכה ישירה של נתוני התקציב, מדרגות המס וכללי הזכאות</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleResetRules}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200"
-              >
-                איפוס לברירת מחדל
-              </button>
-              <button
-                onClick={handleSaveRules}
-                className="lift px-4 py-1.5 rounded-full text-xs font-bold bg-brand text-white hover:bg-brand-dark"
-              >
-                שמור והחל שינויים
-              </button>
-            </div>
+          <div className="pb-3 border-b border-slate-100">
+            <h3 className="text-base font-bold text-ink">כללי החישוב והתקציבים</h3>
+            <p className="text-xs text-slate-500">
+              גרסה <span className="font-mono">{currentRules.version}</span> · מדרגות המס והביטוח הלאומי בלשונית "לוחות מס וביטוח לאומי"
+            </p>
           </div>
 
-          {rulesSavedMsg && (
-            <div className="p-3 rounded-lg bg-success/10 text-success text-xs font-bold">
-              {rulesSavedMsg}
-            </div>
-          )}
-
-          <textarea
-            rows={18}
-            value={rulesJsonString}
-            onChange={(e) => setRulesJsonString(e.target.value)}
-            className="w-full p-4 font-mono text-xs bg-slate-900 text-emerald-400 rounded-xl focus:outline-none"
-            dir="ltr"
+          <DataUploadPanel
+            kind="rules"
+            source={overview.sources.rules}
+            onChanged={loadOverview}
+            onReset={async () => {
+              await api.admin.resetRules();
+            }}
           />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <RulesCard title="תקציב רכב חודשי לפי קבוצה">
+              {currentRules.groupOrder.map((g) => (
+                <RulesLine key={g} label={`קבוצה ${g}`} value={`${(currentRules.budgets[g] ?? 0).toLocaleString()} ₪`} />
+              ))}
+              <RulesLine
+                label="בחירת רכב"
+                value={currentRules.chooseFrom === 'own_group_or_lower' ? 'מהקבוצה של העובד או נמוכה ממנה' : currentRules.chooseFrom}
+              />
+            </RulesCard>
+
+            <RulesCard title="רכב חשמלי">
+              <RulesLine label="החזר חשמל נטו לעובד" value={`${currentRules.electric.netBonus.toLocaleString()} ₪`} />
+              <RulesLine
+                label="שיטה"
+                value={currentRules.electric.method === 'gross_up' ? 'מגולם (העובד רואה את הסכום בנטו)' : 'סכום ברוטו'}
+              />
+            </RulesCard>
+
+            <RulesCard title="מסלול ברוכת ילדים">
+              <RulesLine label="מינימום ילדים" value={String(currentRules.familyTrack.minChildren)} />
+              <RulesLine label="עד גיל" value={String(currentRules.familyTrack.childMaxAge)} />
+              <RulesLine label="מחיר רכב משפחתי" value={`${currentRules.familyTrack.carPrice.toLocaleString()} ₪`} />
+              <RulesLine
+                label="חלק העובד בפער מעל התקציב"
+                value={`${Math.round(currentRules.familyTrack.gapSplitEmployee * 100)}%`}
+              />
+            </RulesCard>
+
+            <RulesCard title="ויתור על רכב">
+              <RulesLine label="מי רשאי לוותר" value={currentRules.waiver.allowedBy === 'occupation' ? 'לפי טבלת העיסוקים' : currentRules.waiver.allowedBy} />
+              <RulesLine label="אחזקת רכב חייבת במס" value={currentRules.waiver.maintenanceIsTaxable ? 'כן' : 'לא'} />
+              <RulesLine label="אחזקת רכב נכללת בפנסיה" value={currentRules.waiver.maintenanceIsPensionable ? 'כן' : 'לא'} />
+              <RulesLine label="תקציב שלא נוצל" value={currentRules.unusedBudget === 'not_paid' ? 'לא משולם' : currentRules.unusedBudget} />
+            </RulesCard>
+          </div>
         </div>
       )}
 
@@ -290,12 +290,17 @@ export const AdminView: React.FC = () => {
         <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-ink">קטלוג הרכבים של שטראוס (20 כלי רכב)</h3>
-              <p className="text-xs text-slate-500">
-                רכבי קבוצות א–ד + רכבי מסלול ברוכת ילדים (CARNIVAL, SANTA FE)
-              </p>
+              <h3 className="text-base font-bold text-ink">קטלוג הרכבים של שטראוס ({overview.catalog.length} כלי רכב)</h3>
+              <p className="text-xs text-slate-500">רכבי קבוצות א–ד + רכבי מסלול ברוכת ילדים</p>
             </div>
           </div>
+
+          <DataUploadPanel
+            kind="workbook"
+            source={overview.sources.catalog}
+            onChanged={loadOverview}
+            onReset={() => api.admin.resetDataTable('catalog')}
+          />
 
           <div className="border border-slate-200 rounded-xl overflow-x-auto">
             <table className="w-full text-right text-xs">
@@ -359,10 +364,17 @@ export const AdminView: React.FC = () => {
         <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-ink">טבלת עיסוקים, רכב חובה ודמי אחזקה (14 עיסוקים)</h3>
+              <h3 className="text-base font-bold text-ink">טבלת עיסוקים, רכב חובה ודמי אחזקה ({overview.occupations.length} עיסוקים)</h3>
               <p className="text-xs text-slate-500">עיסוקים שבהם רכב חובה אינם רשאים לוותר על הרכב כנגד אחזקה</p>
             </div>
           </div>
+
+          <DataUploadPanel
+            kind="workbook"
+            source={overview.sources.occupations}
+            onChanged={loadOverview}
+            onReset={() => api.admin.resetDataTable('occupations')}
+          />
 
           <div className="border border-slate-200 rounded-xl overflow-hidden">
             <table className="w-full text-right text-xs">
@@ -414,10 +426,17 @@ export const AdminView: React.FC = () => {
         <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-ink">עובדי דוגמה לכיול ובדיקות (6 פרופילים)</h3>
+              <h3 className="text-base font-bold text-ink">עובדי דוגמה לכיול ובדיקות ({overview.employees.length} פרופילים)</h3>
               <p className="text-xs text-slate-500">פרופילים רשמיים מחוברת הכיול (שמות ופרטים פיקטיביים)</p>
             </div>
           </div>
+
+          <DataUploadPanel
+            kind="workbook"
+            source={overview.sources.employees}
+            onChanged={loadOverview}
+            onReset={() => api.admin.resetDataTable('employees')}
+          />
 
           <div className="border border-slate-200 rounded-xl overflow-x-auto">
             <table className="w-full text-right text-xs">

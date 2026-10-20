@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import catalogData from '../../data/catalog.json';
 import occupationAliases from '../../data/occupation-aliases.json';
-import occupationsData from '../../data/occupations.json';
 import { buildDeltaSteps, buildPlainHebrewSummary, roundStepsToTotal } from './explain.ts';
 import { calculateEVGrossUp, calculateNetBreakdown } from './net.ts';
+import { getCatalog, getOccupations, referenceVersion } from './referenceData.ts';
 import { canSelectCarGroup, getGroupBudget, getRules } from './rules.ts';
 import {
   Car,
@@ -18,13 +17,10 @@ import {
   TaxCalculationInputs,
 } from './types.ts';
 
-const carsCatalog = catalogData as Car[];
-const occupationsList = occupationsData as Occupation[];
-
 /** Find car in catalog by ID or model name */
 export function findCarByIdOrName(query: string): Car | undefined {
   const clean = query.trim().toLowerCase();
-  return carsCatalog.find(
+  return getCatalog().find(
     (c) =>
       c.id.toLowerCase() === clean ||
       c.model.toLowerCase() === clean ||
@@ -37,11 +33,29 @@ export function findCarByIdOrName(query: string): Car | undefined {
 const normOccupation = (s: string) =>
   s.replace(/\/(ית|ת|ה)(?=\s|$)/g, '').replace(/["'׳״]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-// Every word of the official occupation names ("נציג", "מכירות", "שטח", ...)
-const occupationWords = new Set(occupationsList.flatMap((o) => normOccupation(o.occupation).split(' ')));
+// Built from the active occupations table and rebuilt after the admin replaces it
+let occupationIndex: {
+  version: number;
+  // Every word of the official occupation names ("נציג", "מכירות", "שטח", ...)
+  words: Set<string>;
+  // Names that identify one occupation: the official name and its aliases, longest first
+  names: Array<{ key: string; occ: Occupation }>;
+} | null = null;
+
+function index() {
+  if (occupationIndex?.version === referenceVersion()) return occupationIndex;
+  const list = getOccupations();
+  const words = new Set(list.flatMap((o) => normOccupation(o.occupation).split(' ')));
+  occupationIndex = { version: referenceVersion(), words, names: [] };
+  occupationIndex.names = list
+    .flatMap((o) => [o.occupation, ...((occupationAliases as Record<string, string[]>)[o.occupation] ?? [])].map((n) => ({ key: occupationKey(n), occ: o })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return occupationIndex;
+}
 
 /** Feminine word forms to the listed form: "נציגה" → "נציג", "מנהלת" → "מנהל", "אנליסטית" → "אנליסט" */
 function baseWord(w: string): string {
+  const occupationWords = index().words;
   if (occupationWords.has(w)) return w;
   for (const suffix of ['ית', 'ת', 'ה']) {
     if (w.endsWith(suffix) && occupationWords.has(w.slice(0, -suffix.length))) return w.slice(0, -suffix.length);
@@ -49,11 +63,6 @@ function baseWord(w: string): string {
   return w;
 }
 const occupationKey = (s: string) => normOccupation(s).split(' ').map(baseWord).join(' ');
-
-// Names that identify one occupation: the official name and its aliases, longest first
-const occupationNames = occupationsList
-  .flatMap((o) => [o.occupation, ...((occupationAliases as Record<string, string[]>)[o.occupation] ?? [])].map((n) => ({ key: occupationKey(n), occ: o })))
-  .sort((a, b) => b.key.length - a.key.length);
 
 /**
  * Find occupation info for an employee. Matches the official name, its feminine form or a listed
@@ -63,6 +72,7 @@ const occupationNames = occupationsList
 export function findOccupation(occupationName: string | undefined): Occupation | undefined {
   const key = occupationKey(occupationName ?? '');
   if (!key) return undefined; // occupation is optional outside waive_car; '' must not match the first row
+  const occupationNames = index().names;
   const exact = occupationNames.find((n) => n.key === key);
   if (exact) return exact.occ;
   return occupationNames.find((n) => ` ${key} `.includes(` ${n.key} `))?.occ;
@@ -154,7 +164,7 @@ export function buildScenario(
   } else if (request.type === 'family_track') {
     // Family track (ברוכת ילדים)
     const targetCarId = request.targetCarId || 'CAR-19'; // Default Carnival
-    targetCar = carsCatalog.find((c) => c.id === targetCarId) || carsCatalog.find((c) => c.id === 'CAR-19')!;
+    targetCar = getCatalog().find((c) => c.id === targetCarId) || getCatalog().find((c) => c.id === 'CAR-19')!;
     altCarLabel = `${targetCar.model} (${targetCar.fuel}) - מסלול ברוכת ילדים`;
     companyCost = targetCar.companyCost;
 
@@ -183,15 +193,15 @@ export function buildScenario(
   } else {
     // change_car or go_electric
     if (!targetCar && request.targetCarId) {
-      targetCar = carsCatalog.find((c) => c.id === request.targetCarId);
+      targetCar = getCatalog().find((c) => c.id === request.targetCarId);
     }
     if (!targetCar) {
       // Default fallback if electric requested
       targetCar =
         request.type === 'go_electric'
-          ? carsCatalog.find((c) => c.group === profile.group && c.driveCode === 3) ||
-            carsCatalog.find((c) => c.id === 'CAR-10')!
-          : carsCatalog.find((c) => c.group === profile.group)!;
+          ? getCatalog().find((c) => c.group === profile.group && c.driveCode === 3) ||
+            getCatalog().find((c) => c.id === 'CAR-10')!
+          : getCatalog().find((c) => c.group === profile.group)!;
     }
 
     companyCost = targetCar.companyCost;

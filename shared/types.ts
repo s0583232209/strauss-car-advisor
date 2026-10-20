@@ -275,6 +275,50 @@ export interface AdminOverview {
   employees: EmployeeProfile[];
   taxRecordCount: number;
   storage: 'supabase' | 'file';
+  /** Where each table comes from: the built-in file or an admin upload */
+  sources: Record<'rules' | DataTableKind, 'default' | 'uploaded'>;
+}
+
+/** Tables the admin replaces by uploading the data workbook */
+export type DataTableKind = 'catalog' | 'occupations' | 'employees';
+
+export interface FieldChange {
+  field: string;
+  before: string;
+  after: string;
+}
+
+export interface TableDiff {
+  /** Row names (e.g. "CAR-21 · BYD SEAL") */
+  added: string[];
+  removed: string[];
+  changed: Array<{ row: string; changes: FieldChange[] }>;
+  unchanged: number;
+}
+
+/** One sheet of an uploaded workbook, checked and compared with the active data (nothing saved yet) */
+export interface DataTablePreview {
+  kind: DataTableKind;
+  sheet: string;
+  count: number;
+  previousCount: number;
+  errors: string[];
+  warnings: string[];
+  diff: TableDiff;
+}
+
+export interface DataFilePreview {
+  tables: DataTablePreview[];
+  /** False when a sheet has errors or the file has none of the known sheets */
+  canApply: boolean;
+}
+
+/** An uploaded rules file compared with the active rules (nothing saved yet) */
+export interface RulesPreview {
+  version: string;
+  previousVersion: string;
+  changes: FieldChange[];
+  errors: string[];
 }
 
 /** Who may use what: employee chat, rep tickets, admin data */

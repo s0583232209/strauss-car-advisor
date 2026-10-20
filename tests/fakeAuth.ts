@@ -4,7 +4,7 @@
  */
 
 import type { UserRole } from '../shared/types.ts';
-import type { AuthAttempt, AuthGateway } from '../server/dal/types.ts';
+import type { AuthAttempt, AuthGateway, CreateUserAttempt } from '../server/dal/types.ts';
 
 export const PASSWORD = 'correct horse battery';
 
@@ -21,6 +21,11 @@ export class FakeGateway implements AuthGateway {
   getUserCalls = 0;
   signedOut: string[] = [];
   rateLimited = false;
+  /** Passwords of users made with createUser; the seeded users all use PASSWORD */
+  passwords = new Map<string, string>();
+  /** createUser answers weak_password for this password */
+  weakPassword = 'password123';
+  deleted: string[] = [];
   private n = 0;
 
   private emailOf(userId: string): string {
@@ -37,7 +42,7 @@ export class FakeGateway implements AuthGateway {
   async signInWithPassword(email: string, password: string): Promise<AuthAttempt> {
     if (this.rateLimited) return { ok: false, reason: 'rate_limited' };
     const id = this.users.get(email);
-    return id && password === PASSWORD ? this.issue(id) : { ok: false, reason: 'invalid' };
+    return id && password === (this.passwords.get(email) ?? PASSWORD) ? this.issue(id) : { ok: false, reason: 'invalid' };
   }
 
   async refresh(refreshToken: string): Promise<AuthAttempt> {
@@ -57,11 +62,30 @@ export class FakeGateway implements AuthGateway {
     this.signedOut.push(accessToken);
     this.access.delete(accessToken);
   }
+
+  async createUser(email: string, password: string): Promise<CreateUserAttempt> {
+    if (this.users.has(email)) return { ok: false, reason: 'exists' };
+    if (password === this.weakPassword) return { ok: false, reason: 'weak_password' };
+    const id = `u-new-${++this.n}`;
+    this.users.set(email, id);
+    this.passwords.set(email, password);
+    return { ok: true, user: { id, email } };
+  }
+
+  async deleteUser(userId: string) {
+    this.deleted.push(userId);
+    for (const [email, id] of this.users) if (id === userId) this.users.delete(email);
+  }
 }
 
 const roles: Record<string, UserRole> = { 'u-employee': 'employee', 'u-employee2': 'employee', 'u-rep': 'rep', 'u-admin': 'admin' };
-/** app_users: norole@example.com has no row */
-export const roleRepo = { getUserRole: async (id: string) => roles[id] ?? null };
+/** app_users: norole@example.com has no row; setUserRole adds rows for users made in a test */
+export const roleRepo = {
+  getUserRole: async (id: string) => roles[id] ?? null,
+  setUserRole: async (id: string, role: UserRole) => {
+    roles[id] = role;
+  },
+};
 
 /** Logs in through the API and returns the "name=value" cookies for the next requests */
 export async function loginCookie(apiBase: string, email: string): Promise<string> {

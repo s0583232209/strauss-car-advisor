@@ -10,7 +10,7 @@
  */
 
 import { randomInt, randomUUID } from 'node:crypto';
-import employeesData from '../../data/employees.json';
+import { getEmployees } from '../engine/referenceData.ts';
 import { runAgentTurn } from '../agent/loop.ts';
 import { buildOpeningMessage } from '../agent/profileStatus.ts';
 import { getMissingFields } from '../agent/tools.ts';
@@ -28,7 +28,6 @@ import { applyRepAnswer, findUndeliveredAnswers } from './repAnswer.ts';
 
 // Start of the system message shown when a sample employee is loaded (dry runs only)
 const SAMPLE_LOADED_PREFIX = 'נטענו בהצלחה נתוני הדוגמה של';
-const employees = employeesData as EmployeeProfile[];
 
 // Empty profile: every field is undefined until the agent collects it (get_missing_fields)
 const emptyProfile = () => ({}) as EmployeeProfile;
@@ -57,7 +56,7 @@ const toState = (s: SessionRecord): SessionState => ({
 });
 
 export function sampleEmployees(): SampleEmployee[] {
-  return employees.map((e) => ({ id: e.id!, name: e.name!, occupation: e.occupation!, group: e.group }));
+  return getEmployees().map((e) => ({ id: e.id!, name: e.name!, occupation: e.occupation!, group: e.group }));
 }
 
 export function createSessionService(repo: Repository, now: () => number = Date.now) {
@@ -225,7 +224,7 @@ export function createSessionService(repo: Repository, now: () => number = Date.
 
     loadSample(id: string, employeeId: string): Promise<SessionState> {
       return withLock(id, async () => {
-        const target = employees.find((e) => e.id === employeeId);
+        const target = getEmployees().find((e) => e.id === employeeId);
         if (!target) throw new NotFoundError('sample employee not found');
         const s = await load(id);
         s.profile = structuredClone(target);

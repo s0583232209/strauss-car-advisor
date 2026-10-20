@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import catalogData from '../../data/catalog.json';
+import { getCatalog } from './referenceData.ts';
 import taxSeedData from '../../data/tax-seed.json';
 import { VehicleLookupResult } from './types.ts';
 
@@ -71,7 +71,7 @@ export async function lookupBenefitValue(
   }
 
   // 3. Fallback to catalog seed
-  const catItem = catalogData.find(
+  const catItem = getCatalog().find(
     (c) =>
       String(c.year) === String(regYear).trim() &&
       c.productCode.padStart(5, '0') === String(productCode).trim().padStart(5, '0') &&
