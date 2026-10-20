@@ -233,13 +233,16 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Payslip upload is disabled until the feature is finished */}
                 <button
-                  onClick={() => setIsPayslipModalOpen(true)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1"
-                  title="העלאת תלוש שכר"
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 bg-slate-100 cursor-not-allowed opacity-70 flex items-center gap-1"
+                  title="העלאת תלוש - עדיין בפיתוח"
                 >
-                  <Paperclip className="w-3.5 h-3.5 text-slate-600" />
-                  <span className="hidden sm:inline">העלאת תלוש</span>
+                  <Paperclip className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden sm:inline">העלאת תלוש - עדיין בפיתוח</span>
                 </button>
 
                 <button
@@ -325,9 +328,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
               >
                 <button
                   type="button"
-                  onClick={() => setIsPayslipModalOpen(true)}
-                  className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-                  title="העלאת תלוש"
+                  disabled
+                  aria-disabled="true"
+                  className="p-2 text-slate-300 rounded-lg cursor-not-allowed"
+                  title="העלאת תלוש - עדיין בפיתוח"
                 >
                   <Paperclip className="w-5 h-5" />
                 </button>
