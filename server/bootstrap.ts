@@ -14,6 +14,7 @@ import { configureLlm } from './bl/agent/llm.ts';
 import { createGemini } from './bl/llm/gemini.ts';
 import { createAdminService } from './bl/services/adminService.ts';
 import { createAuthService } from './bl/services/authService.ts';
+import { createHighlightsService } from './bl/services/highlightsService.ts';
 import { createSessionService } from './bl/services/sessionService.ts';
 import { createTicketService } from './bl/services/ticketService.ts';
 import type { ServerConfig } from './config.ts';
@@ -35,6 +36,7 @@ export async function buildApiApp(config: ServerConfig): Promise<{ app: express.
   await admin.init();
   const sessions = createSessionService(repo);
   const tickets = createTicketService(repo);
+  const highlights = createHighlightsService(repo, config.gemini.apiKey ? gemini.draftCarHighlights : null);
   const auth = authGateway ? createAuthService(authGateway, repo) : null;
 
   // API Layer
@@ -44,6 +46,7 @@ export async function buildApiApp(config: ServerConfig): Promise<{ app: express.
     tickets,
     admin,
     auth,
+    highlights,
     extractPayslip: gemini.extractPayslip,
     healthDetails: () => ({ ...gemini.status(), storage: repo.kind }),
   });

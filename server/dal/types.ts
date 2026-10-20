@@ -8,7 +8,7 @@
  * the client never reaches storage (Supabase is called with the server key only).
  */
 
-import type { ChatMessage, ComparisonResult, EmployeeProfile, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
+import type { CarHighlightsRecord, ChatMessage, ComparisonResult,EmployeeProfile, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 
 export type ReferenceKind = 'catalog' | 'occupations' | 'employees';
 
@@ -63,6 +63,10 @@ export interface Repository {
   /** An uploaded reference table (catalog, occupations, employees); null = the built-in file */
   getReferenceData(kind: ReferenceKind): Promise<unknown[] | null>;
   saveReferenceData(kind: ReferenceKind, rows: unknown[] | null): Promise<void>;
+
+  /** Pros and cons of catalog cars (drafts and approved), one record per car id */
+  getCarHighlights(): Promise<CarHighlightsRecord[]>;
+  saveCarHighlights(records: CarHighlightsRecord[]): Promise<void>;
 
   saveTaxRecords(records: TaxRecord[]): Promise<void>;
   getTaxRecord(key: string): Promise<VehicleLookupResult | null>;

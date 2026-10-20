@@ -9,9 +9,12 @@
  */
 
 import type {
+  AdminHighlightsRow,
   AdminOverview,
   AuthStatus,
   AuthUser,
+  CarHighlights,
+  CarHighlightsRecord,
   ChatStreamEvent,
   DataFilePreview,
   DataTableKind,
@@ -130,6 +133,9 @@ export const api = {
 
   meta: () => request<{ sampleEmployees: SampleEmployee[]; rules: Rules }>('GET', '/meta'),
 
+  /** Approved pros and cons of the catalog cars, by car id */
+  highlights: () => request<Record<string, CarHighlights>>('GET', '/highlights'),
+
   sessions: {
     /**
      * This browser's conversation; else the user's latest one (from any device); else a new one.
@@ -222,6 +228,14 @@ export const api = {
     clearTaxRecords: () => request<void>('DELETE', '/admin/tax-records'),
     createUser: (user: { email: string; password: string; role: UserRole }) =>
       request<AuthUser>('POST', '/admin/users', { body: user }),
+    highlights: {
+      list: () => request<AdminHighlightsRow[]>('GET', '/admin/highlights'),
+      /** A new model draft for one car (replaces its saved text) */
+      draft: (carId: string) => request<CarHighlightsRecord>('POST', `/admin/highlights/${encodeURIComponent(carId)}/draft`),
+      approve: (carId: string, h: CarHighlights) =>
+        request<CarHighlightsRecord>('PUT', `/admin/highlights/${encodeURIComponent(carId)}`, { body: h }),
+      remove: (carId: string) => request<void>('DELETE', `/admin/highlights/${encodeURIComponent(carId)}`),
+    },
     lookup: async (q: { year: string; type: string; product: string; model: string }) =>
       (await request<{ result: VehicleLookupResult | null }>('GET', `/admin/tax-records/lookup?${new URLSearchParams(q)}`)).result,
   },

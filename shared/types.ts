@@ -321,6 +321,31 @@ export interface RulesPreview {
   errors: string[];
 }
 
+/** Up to 3 main pros and 3 main cons of a catalog car, in Hebrew, without numbers from the model */
+export interface CarHighlights {
+  pros: string[];
+  cons: string[];
+}
+
+/** Saved highlights of one car: a model draft until the admin approves it */
+export interface CarHighlightsRecord extends CarHighlights {
+  carId: string;
+  /** The car they were written for ("make model year"); another car under the same id makes them stale */
+  carLabel: string;
+  status: 'draft' | 'approved';
+  updatedAt: number;
+}
+
+/** One catalog car on the admin highlights screen */
+export interface AdminHighlightsRow {
+  carId: string;
+  carLabel: string;
+  group: EligibilityGroup;
+  record: CarHighlightsRecord | null;
+  /** The saved text was written for a different car under this id */
+  stale: boolean;
+}
+
 /** Who may use what: employee chat, rep tickets, admin data */
 export type UserRole = 'employee' | 'rep' | 'admin';
 

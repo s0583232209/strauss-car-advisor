@@ -10,7 +10,7 @@
  * Errors are thrown, never hidden behind a local fallback.
  */
 
-import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
+import type { CarHighlightsRecord, ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 import { ReferenceKind, Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 const TAX_BATCH = 1000;
@@ -184,6 +184,15 @@ export class SupabaseRepository implements Repository {
       return;
     }
     await this.upsert('app_settings', { key: `data:${kind}`, value: rows, updated_at: new Date().toISOString() });
+  }
+
+  async getCarHighlights(): Promise<CarHighlightsRecord[]> {
+    const [row] = await this.rows<any>('app_settings?key=eq.highlights&select=value');
+    return Array.isArray(row?.value) ? row.value : [];
+  }
+
+  async saveCarHighlights(records: CarHighlightsRecord[]): Promise<void> {
+    await this.upsert('app_settings', { key: 'highlights', value: records, updated_at: new Date().toISOString() });
   }
 
   async saveTaxRecords(records: TaxRecord[]): Promise<void> {

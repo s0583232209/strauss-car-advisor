@@ -13,12 +13,14 @@ import type { ServerConfig } from '../config.ts';
 import { getRules } from '../bl/engine/rules.ts';
 import type { AdminService } from '../bl/services/adminService.ts';
 import type { AuthService } from '../bl/services/authService.ts';
+import type { HighlightsService } from '../bl/services/highlightsService.ts';
 import { sampleEmployees, type SessionService } from '../bl/services/sessionService.ts';
 import type { TicketService } from '../bl/services/ticketService.ts';
 import { ALL_ROLES, requireRole } from './authCookies.ts';
-import { cors, errorHandler, rateLimit, securityHeaders } from './middleware.ts';
+import { asyncHandler, cors, errorHandler, rateLimit, securityHeaders } from './middleware.ts';
 import { adminRouter } from './routes/admin.ts';
 import { authRouter } from './routes/auth.ts';
+import { highlightsAdminRouter } from './routes/highlights.ts';
 import { payslipRouter } from './routes/payslip.ts';
 import { sessionsRouter } from './routes/sessions.ts';
 import { ticketsRouter } from './routes/tickets.ts';
@@ -30,6 +32,8 @@ export interface AppDeps {
   admin: AdminService;
   /** Login (Supabase Auth); null = no login (development with the file store) */
   auth?: AuthService | null;
+  /** Car pros and cons; absent = the feature is off (older tests) */
+  highlights?: HighlightsService;
   extractPayslip: (fileData: string, mimeType: string) => Promise<unknown>;
   /** Extra details for /api/health outside production (model cooldowns, storage) */
   healthDetails?: () => Record<string, unknown>;
@@ -52,12 +56,13 @@ export function createApp(deps: AppDeps): express.Express {
   const anyUser = requireRole(auth, ALL_ROLES);
 
   // Rules and data tables the admin saved on another instance (serverless): reloaded every 30 s at most
-  api.use(['/sessions', '/meta', '/admin'], (_req, _res, next) => {
+  api.use(['/sessions', '/meta', '/admin', '/highlights'],(_req, _res, next) => {
     deps.admin.syncIfStale().then(() => next(), next);
   });
 
   // Routes with their own body parsers and limits come before the global JSON parser
   api.use('/payslip', anyUser, payslipRouter(deps.extractPayslip));
+  if (deps.highlights) api.use('/admin/highlights', requireRole(auth, ['admin']), highlightsAdminRouter(deps.highlights));
   api.use('/admin', requireRole(auth, ['admin']), adminRouter(deps.admin, auth));
 
   api.use(express.json({ limit: '100kb' }));
@@ -77,6 +82,11 @@ export function createApp(deps: AppDeps): express.Express {
   api.get('/meta', anyUser, (_req, res) => {
     res.json({ sampleEmployees: sampleEmployees(), rules: getRules() });
   });
+
+  // Approved pros and cons of the catalog cars, by car id (shown beside the comparison)
+  api.get('/highlights', anyUser, asyncHandler(async (_req, res) => {
+    res.json(deps.highlights ? await deps.highlights.approved() : {});
+  }));
 
   api.use((_req, res) => {
     res.status(404).json({ error: 'נתיב לא קיים' });

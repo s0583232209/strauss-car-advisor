@@ -15,6 +15,7 @@ import {
   Play,
   Search,
   Sliders,
+  ThumbsUp,
   Upload,
   Users,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ import React, { useEffect, useState } from 'react';
 import type { AdminOverview, Rules, VehicleLookupResult } from '../../shared/types.ts';
 import { api, ApiError } from '../api/client.ts';
 import { DataUploadPanel } from './DataUploadPanel.tsx';
+import { HighlightsPanel } from './HighlightsPanel.tsx';
 
 const RulesCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
@@ -39,7 +41,7 @@ const RulesLine: React.FC<{ label: string; value: string }> = ({ label, value })
 
 export const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    'rules' | 'catalog' | 'occupations' | 'employees' | 'tax' | 'db' | 'assumptions'
+    'rules' | 'catalog' | 'highlights' | 'occupations' | 'employees' | 'tax' | 'db' | 'assumptions'
   >('rules');
 
   // Reference data, rules and record count from the server
@@ -174,6 +176,16 @@ export const AdminView: React.FC = () => {
         >
           <CarIcon className="w-4 h-4" />
           <span>קטלוג רכבים ({overview.catalog.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('highlights')}
+          className={`px-3.5 py-2 rounded-full whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'highlights' ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <ThumbsUp className="w-4 h-4" />
+          <span>יתרונות וחסרונות</span>
         </button>
 
         <button
@@ -727,6 +739,19 @@ export const AdminView: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Car pros and cons (AI draft, admin approval) */}
+      {activeTab === 'highlights' && (
+        <div className="bg-white rounded-2xl border border-line p-6 shadow-xs space-y-4">
+          <div className="pb-3 border-b border-slate-100">
+            <h3 className="text-base font-bold text-ink">יתרונות וחסרונות לכל רכב</h3>
+            <p className="text-xs text-slate-500">
+              3 יתרונות ו-3 חסרונות מרכזיים, מוצגים לעובד ליד השוואת הנטו. לחצו "צור טיוטה", בדקו ואשרו.
+            </p>
+          </div>
+          <HighlightsPanel onError={handleApiError} />
         </div>
       )}
 

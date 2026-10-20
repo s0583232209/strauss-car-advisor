@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
+  CarFront,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -16,13 +17,45 @@ import {
   Printer,
   RefreshCw,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { ComparisonResult } from '../../shared/types.ts';
+import { CarHighlights, ComparisonResult } from '../../shared/types.ts';
 import { WaterfallChart } from './WaterfallChart.tsx';
+
+/** Approved pros and cons of one car (admin-approved text, no numbers from the model) */
+const CarHighlightsColumn: React.FC<{ title: string; carLabel: string; highlights: CarHighlights }> = ({
+  title,
+  carLabel,
+  highlights,
+}) => (
+  <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+    <div>
+      <div className="text-xs font-semibold text-slate-500">{title}</div>
+      <div className="text-sm font-bold text-ink">{carLabel}</div>
+    </div>
+    <ul className="space-y-1.5 text-xs sm:text-sm">
+      {highlights.pros.map((t, i) => (
+        <li key={`p${i}`} className="flex items-start gap-2 text-slate-700">
+          <ThumbsUp className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
+          <span>{t}</span>
+        </li>
+      ))}
+      {highlights.cons.map((t, i) => (
+        <li key={`c${i}`} className="flex items-start gap-2 text-slate-700">
+          <ThumbsDown className="w-3.5 h-3.5 text-danger shrink-0 mt-0.5" />
+          <span>{t}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
 
 interface ComparisonCardProps {
   comparison: ComparisonResult;
+  /** Pros and cons of today's car and of the alternative car, when the admin approved them */
+  highlights?: { today?: CarHighlights; alt?: CarHighlights };
   onSelectCarAgain?: () => void;
   onCompareAnother?: () => void;
   onAskRep?: () => void;
@@ -31,6 +64,7 @@ interface ComparisonCardProps {
 
 export const ComparisonCard: React.FC<ComparisonCardProps> = ({
   comparison,
+  highlights,
   onSelectCarAgain,
   onCompareAnother,
   onAskRep,
@@ -202,6 +236,27 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Beyond the money: approved pros and cons of the cars */}
+      {(highlights?.today || highlights?.alt) && (
+        <div className="p-6 border-b border-line">
+          <h4 className="text-sm font-bold text-ink mb-3 flex items-center gap-2">
+            <CarFront className="w-4 h-4 text-brand-dark" />
+            <span>מעבר לכסף: יתרונות וחסרונות מרכזיים</span>
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-3">
+            {highlights.today && (
+              <CarHighlightsColumn title="הרכב היום" carLabel={comparison.todayCarLabel} highlights={highlights.today} />
+            )}
+            {highlights.alt && (
+              <CarHighlightsColumn title="החלופה" carLabel={comparison.altCarLabel} highlights={highlights.alt} />
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            סיכום כללי שאושר על ידי מנהל המערכת. אינו מפרט טכני; לפרטים מלאים פנו ליבואן.
+          </p>
+        </div>
+      )}
 
       {/* "למה?" Delta Steps & Waterfall Chart */}
       <div className="p-6 border-b border-line">

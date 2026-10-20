@@ -12,7 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import type { ChatMessage, ComparisonResult, EmployeeProfile, SessionState } from '../../shared/types.ts';
+import type { CarHighlights, ChatMessage, ComparisonResult,EmployeeProfile, SessionState } from '../../shared/types.ts';
 import { api } from '../api/client.ts';
 import { AdvisorLogo, Pinwheel } from './CarDecor.tsx';
 import { ComparisonCard } from './ComparisonCard.tsx';
@@ -111,6 +111,14 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
   useEffect(() => {
     api.sessions.current().then(applyState).catch(showError);
   }, []);
+
+  // Approved pros and cons of the catalog cars; fetched again with each new comparison (the admin may
+  // have approved more). Without them the card shows the money comparison only.
+  const [carHighlights, setCarHighlights] = useState<Record<string, CarHighlights>>({});
+  useEffect(() => {
+    if (!lastComparison) return;
+    api.highlights().then(setCarHighlights).catch(() => undefined);
+  }, [lastComparison]);
 
   // Rep answers arrive through the server: poll while idle and show new messages
   useEffect(() => {
@@ -346,6 +354,13 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
           <div className={`lg:col-span-12 lg:order-3 ${calcCols} xl:order-2 min-w-0`}>
             <ComparisonCard
               comparison={lastComparison}
+              highlights={{
+                today: profile.hasCar && profile.currentCarId ? carHighlights[profile.currentCarId] : undefined,
+                alt:
+                  lastComparison.targetCar && lastComparison.targetCar.id !== profile.currentCarId
+                    ? carHighlights[lastComparison.targetCar.id]
+                    : undefined,
+              }}
               onSelectCarAgain={() => handleSendMessage('אילו רכבים נוספים אני יכול לבחור בקבוצה שלי?')}
               onCompareAnother={() => handleSendMessage('מה קורה אם אני מוותר על הרכב ומקבל אחזקה?')}
               onAskRep={() =>

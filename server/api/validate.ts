@@ -5,8 +5,9 @@
 
 /** Input validation for every API body and parameter (unknown fields are rejected) */
 
-import type { EmployeeProfile, UserRole } from '../../shared/types.ts';
+import type { CarHighlights, EmployeeProfile, UserRole } from '../../shared/types.ts';
 import { PAYSLIP_FIELDS } from '../bl/agent/extract.ts';
+import { MAX_HIGHLIGHT_LENGTH, MAX_HIGHLIGHTS } from '../bl/services/highlightsService.ts';
 import { HttpError } from './middleware.ts';
 
 const fail = (message: string): never => {
@@ -186,6 +187,22 @@ const DATA_TABLES = ['catalog', 'occupations', 'employees'] as const;
 export function dataTableParam(v: unknown): (typeof DATA_TABLES)[number] {
   if (!DATA_TABLES.includes(v as (typeof DATA_TABLES)[number])) fail('טבלה לא מוכרת');
   return v as (typeof DATA_TABLES)[number];
+}
+
+export function carIdParam(v: unknown): string {
+  return text(v, 'carId', 40)!;
+}
+
+/** The admin's approved pros and cons: 1–3 non-empty lines each */
+export function highlightsBody(body: unknown): CarHighlights {
+  const b = object(body, ['pros', 'cons'], 'יתרונות וחסרונות');
+  const list = (v: unknown, field: string, name: string): string[] => {
+    if (!Array.isArray(v)) return fail(`${field}: נדרשת רשימה`);
+    const items = v.map((item, i) => text(item, `${field}[${i}]`, MAX_HIGHLIGHT_LENGTH, false)).filter((t): t is string => Boolean(t));
+    if (items.length === 0 || items.length > MAX_HIGHLIGHTS) fail(`נדרשים 1 עד ${MAX_HIGHLIGHTS} ${name}`);
+    return items;
+  };
+  return { pros: list(b.pros, 'pros', 'יתרונות'), cons: list(b.cons, 'cons', 'חסרונות') };
 }
 
 export function lookupQuery(q: Record<string, unknown>): { year: string; type: string; product: string; model: string } {

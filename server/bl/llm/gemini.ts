@@ -10,6 +10,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
+import type { Car } from '../../../shared/types.ts';
 import type { LlmCallResult, LlmMessage, LlmRequest } from '../agent/llm.ts';
 
 export interface GeminiConfig {
@@ -44,6 +45,22 @@ const PAYSLIP_PROMPT = `
 - childrenUpTo23: מספר ילדים עד גיל 23 אם מופיע (מספר)
 
 עבור כל שדה החזר אובייקט עם { "value": ערך_או_null, "confidence": "high"|"medium"|"low", "sourceQuote": "ציטוט מהמסמך" }.
+`;
+
+/** Only the car's identity goes to the model: no prices, no employee data */
+export const highlightsPrompt = (car: Pick<Car, 'make' | 'model' | 'year' | 'fuel'>): string => `
+אתה עוזר לעובדים לבחור רכב צמוד מהחברה.
+כתוב את 3 היתרונות המרכזיים ואת 3 החסרונות המרכזיים של הרכב הבא, מנקודת המבט של עובד שנוהג בו כל יום
+(נוחות, מרחב לנוסעים ולמטען, בטיחות, צריכת דלק או טעינה, ביצועים, אמינות, נוחות בעיר ובכביש).
+
+רכב: ${car.make} ${car.model}, שנתון ${car.year}, הנעה: ${car.fuel}.
+
+כללים:
+- כל פריט הוא משפט קצר בעברית, עד 8 מילים.
+- בלי מספרים, ספרות, מחירים, אחוזים או נתונים מדויקים (לא ק"מ, לא ליטרים, לא כוח סוס, לא כוכבי בטיחות).
+- בלי שכר, מס או שווי שימוש.
+- אם אינך בטוח בפרט על הדגם, כתוב תכונה כללית של סוג הרכב וההנעה שלו, ואל תמציא.
+החזר JSON בלבד: {"pros": ["...", "...", "..."], "cons": ["...", "...", "..."]}
 `;
 
 /** Agent conversation → Gemini contents (raw model turns are passed back unchanged: thought signatures) */
@@ -161,6 +178,25 @@ export function createGemini(config: GeminiConfig) {
     return JSON.parse(response.text || '{}');
   }
 
+  /** A draft of 3 pros and 3 cons for one catalog car (the admin approves it before employees see it) */
+  async function draftCarHighlights(car: Car): Promise<unknown> {
+    const { response } = await generateWithFallback({
+      contents: [{ role: 'user', parts: [{ text: highlightsPrompt(car) }] }],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            pros: { type: 'array', items: { type: 'string' } },
+            cons: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['pros', 'cons'],
+        },
+      },
+    });
+    return JSON.parse(response.text || '{}');
+  }
+
   function status() {
     const now = Date.now();
     return {
@@ -172,7 +208,7 @@ export function createGemini(config: GeminiConfig) {
     };
   }
 
-  return { generate, extractPayslip, status };
+  return { generate, extractPayslip, draftCarHighlights, status };
 }
 
 export type Gemini = ReturnType<typeof createGemini>;

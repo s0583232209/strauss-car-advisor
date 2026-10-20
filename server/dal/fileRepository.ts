@@ -11,7 +11,7 @@
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
+import type { CarHighlightsRecord, ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 import { ReferenceKind, Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 interface AppData {
@@ -20,6 +20,8 @@ interface AppData {
   rules: Rules | null;
   /** Uploaded reference tables (absent in files written before uploads existed) */
   reference?: Partial<Record<ReferenceKind, unknown[]>>;
+  /** Pros and cons of catalog cars (absent in older files) */
+  highlights?: CarHighlightsRecord[];
 }
 
 const emptyData = (): AppData => ({ sessions: {}, tickets: [], rules: null });
@@ -148,6 +150,15 @@ export class FileRepository implements Repository {
     data.reference ??= {};
     if (rows) data.reference[kind] = structuredClone(rows);
     else delete data.reference[kind];
+    await this.flush();
+  }
+
+  async getCarHighlights(): Promise<CarHighlightsRecord[]> {
+    return structuredClone((await this.app()).highlights ?? []);
+  }
+
+  async saveCarHighlights(records: CarHighlightsRecord[]): Promise<void> {
+    (await this.app()).highlights = structuredClone(records);
     await this.flush();
   }
 

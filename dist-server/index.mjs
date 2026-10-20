@@ -2,11 +2,11 @@ process.env.NODE_ENV='production';
 
 // server/index.ts
 import dotenv from "dotenv";
-import express4 from "express";
+import express5 from "express";
 import path3 from "node:path";
 
 // server/api/app.ts
-import express3, { Router as Router6 } from "express";
+import express4, { Router as Router7 } from "express";
 
 // server/data/strauss-rules.json
 var strauss_rules_default = {
@@ -3121,6 +3121,92 @@ var PAYSLIP_EXTRACTION_PROMPT = `
 \u05D4\u05D7\u05D6\u05E8 \u05D0\u05DA \u05D5\u05E8\u05E7 \u05DE\u05D1\u05E0\u05D4 JSON \u05EA\u05E7\u05E0\u05D9.
 `.trim();
 
+// server/bl/services/highlightsService.ts
+var MAX_HIGHLIGHTS = 3;
+var MAX_HIGHLIGHT_LENGTH = 120;
+var HighlightsError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+};
+var carLabelOf = (car) => `${car.make} ${car.model} ${car.year}`;
+function cleanList(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const t = item.replace(/\s+/g, " ").replace(/^[-•*·]\s*/, "").trim();
+    if (!t || /\d/.test(t) || t.length > MAX_HIGHLIGHT_LENGTH || out.includes(t)) continue;
+    out.push(t);
+    if (out.length === MAX_HIGHLIGHTS) break;
+  }
+  return out;
+}
+function cleanDraft(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  return { pros: cleanList(r.pros), cons: cleanList(r.cons) };
+}
+function createHighlightsService(repo, drafter, now = Date.now) {
+  function findCar(carId) {
+    const car = getCatalog().find((c) => c.id === carId);
+    if (!car) throw new HighlightsError(404, "\u05D4\u05E8\u05DB\u05D1 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05D1\u05E7\u05D8\u05DC\u05D5\u05D2");
+    return car;
+  }
+  async function put(record) {
+    const all = await repo.getCarHighlights();
+    await repo.saveCarHighlights([...all.filter((r) => r.carId !== record.carId), record]);
+    return record;
+  }
+  return {
+    /** Every catalog car with its saved text (if any), for the admin screen */
+    async list() {
+      const saved = new Map((await repo.getCarHighlights()).map((r) => [r.carId, r]));
+      return getCatalog().map((car) => {
+        const record = saved.get(car.id) ?? null;
+        const carLabel = carLabelOf(car);
+        return { carId: car.id, carLabel, group: car.group, record, stale: Boolean(record && record.carLabel !== carLabel) };
+      });
+    },
+    /** A new model draft for one car; replaces what was saved for it (also an approved text) */
+    async draft(carId) {
+      const car = findCar(carId);
+      if (!drafter) throw new HighlightsError(503, "\u05D9\u05E6\u05D9\u05E8\u05EA \u05D8\u05D9\u05D5\u05D8\u05D4 \u05D3\u05D5\u05E8\u05E9\u05EA \u05DE\u05E4\u05EA\u05D7 Gemini, \u05E9\u05D0\u05D9\u05E0\u05D5 \u05DE\u05D5\u05D2\u05D3\u05E8 \u05D1\u05E9\u05E8\u05EA");
+      let raw;
+      try {
+        raw = await drafter(car);
+      } catch (err) {
+        console.warn(`[highlights] draft for ${carId} failed: ${err?.name ?? "Error"} (${err?.status ?? "-"})`);
+        throw new HighlightsError(503, "\u05D4\u05DE\u05D5\u05D3\u05DC \u05DC\u05D0 \u05D6\u05DE\u05D9\u05DF \u05DB\u05E8\u05D2\u05E2. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05D3\u05E7\u05D4");
+      }
+      const draft = cleanDraft(raw);
+      if (!draft.pros.length || !draft.cons.length) {
+        throw new HighlightsError(502, "\u05D4\u05DE\u05D5\u05D3\u05DC \u05D4\u05D7\u05D6\u05D9\u05E8 \u05D8\u05D9\u05D5\u05D8\u05D4 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1");
+      }
+      return put({ carId, carLabel: carLabelOf(car), status: "draft", ...draft, updatedAt: now() });
+    },
+    /** The admin's approved text (the draft as is, or edited) */
+    async approve(carId, highlights) {
+      const car = findCar(carId);
+      return put({ carId, carLabel: carLabelOf(car), status: "approved", pros: highlights.pros, cons: highlights.cons, updatedAt: now() });
+    },
+    async remove(carId) {
+      const all = await repo.getCarHighlights();
+      await repo.saveCarHighlights(all.filter((r) => r.carId !== carId));
+    },
+    /** What employees see: approved, not stale, cars in the active catalog only */
+    async approved() {
+      const saved = new Map((await repo.getCarHighlights()).map((r) => [r.carId, r]));
+      const out = {};
+      for (const car of getCatalog()) {
+        const r = saved.get(car.id);
+        if (r?.status === "approved" && r.carLabel === carLabelOf(car)) out[car.id] = { pros: r.pros, cons: r.cons };
+      }
+      return out;
+    }
+  };
+}
+
 // server/api/validate.ts
 var fail = (message) => {
   throw new HttpError(400, message);
@@ -3272,6 +3358,19 @@ function dataTableParam(v) {
   if (!DATA_TABLES.includes(v)) fail("\u05D8\u05D1\u05DC\u05D4 \u05DC\u05D0 \u05DE\u05D5\u05DB\u05E8\u05EA");
   return v;
 }
+function carIdParam(v) {
+  return text(v, "carId", 40);
+}
+function highlightsBody(body) {
+  const b = object(body, ["pros", "cons"], "\u05D9\u05EA\u05E8\u05D5\u05E0\u05D5\u05EA \u05D5\u05D7\u05E1\u05E8\u05D5\u05E0\u05D5\u05EA");
+  const list2 = (v, field, name) => {
+    if (!Array.isArray(v)) return fail(`${field}: \u05E0\u05D3\u05E8\u05E9\u05EA \u05E8\u05E9\u05D9\u05DE\u05D4`);
+    const items = v.map((item, i) => text(item, `${field}[${i}]`, MAX_HIGHLIGHT_LENGTH, false)).filter((t) => Boolean(t));
+    if (items.length === 0 || items.length > MAX_HIGHLIGHTS) fail(`\u05E0\u05D3\u05E8\u05E9\u05D9\u05DD 1 \u05E2\u05D3 ${MAX_HIGHLIGHTS} ${name}`);
+    return items;
+  };
+  return { pros: list2(b.pros, "pros", "\u05D9\u05EA\u05E8\u05D5\u05E0\u05D5\u05EA"), cons: list2(b.cons, "cons", "\u05D7\u05E1\u05E8\u05D5\u05E0\u05D5\u05EA") };
+}
 function lookupQuery(q) {
   const digits = (v, field, max) => {
     if (typeof v !== "string" || !new RegExp(`^\\d{1,${max}}$`).test(v)) fail(`${field}: \u05E0\u05D3\u05E8\u05E9 \u05DE\u05E1\u05E4\u05E8`);
@@ -3394,15 +3493,44 @@ function authRouter(auth, secureCookies) {
   return router;
 }
 
-// server/api/routes/payslip.ts
+// server/api/routes/highlights.ts
 import express2, { Router as Router3 } from "express";
-function payslipRouter(extract) {
+function highlightsAdminRouter(highlights) {
   const router = Router3();
+  router.use(express2.json({ limit: "20kb" }));
+  router.get("/", asyncHandler(async (_req, res) => {
+    res.json(await highlights.list());
+  }));
+  router.post(
+    "/:carId/draft",
+    rateLimit({ name: "highlights-draft", windowMs: 6e4, max: 40 }),
+    asyncHandler(async (req, res) => {
+      res.json(await highlights.draft(carIdParam(req.params.carId)));
+    })
+  );
+  router.put("/:carId", asyncHandler(async (req, res) => {
+    res.json(await highlights.approve(carIdParam(req.params.carId), highlightsBody(req.body)));
+  }));
+  router.delete("/:carId", asyncHandler(async (req, res) => {
+    await highlights.remove(carIdParam(req.params.carId));
+    res.status(204).end();
+  }));
+  router.use((err, _req, res, next) => {
+    if (err instanceof HighlightsError) res.status(err.status).json({ error: err.message });
+    else next(err);
+  });
+  return router;
+}
+
+// server/api/routes/payslip.ts
+import express3, { Router as Router4 } from "express";
+function payslipRouter(extract) {
+  const router = Router4();
   router.post(
     "/extract",
     rateLimit({ name: "payslip", windowMs: 10 * 6e4, max: 10 }),
     // Own body limit (base64 of a file up to ~10 MB); mounted before the global 100kb JSON parser
-    express2.json({ limit: "15mb" }),
+    express3.json({ limit: "15mb" }),
     asyncHandler(async (req, res) => {
       const { fileData, mimeType } = payslipBody(req.body);
       res.json(payslipResult(await extract(fileData, mimeType)));
@@ -3412,9 +3540,9 @@ function payslipRouter(extract) {
 }
 
 // server/api/routes/sessions.ts
-import { Router as Router4 } from "express";
+import { Router as Router5 } from "express";
 function sessionsRouter(sessions) {
-  const router = Router4();
+  const router = Router5();
   const messageLimit = rateLimit({ name: "messages", windowMs: 6e4, max: 30 });
   const createLimit = rateLimit({ name: "session-create", windowMs: 6e4, max: 20 });
   const userId = (res) => res.locals.user?.id;
@@ -3486,9 +3614,9 @@ function sessionsRouter(sessions) {
 }
 
 // server/api/routes/tickets.ts
-import { Router as Router5 } from "express";
+import { Router as Router6 } from "express";
 function ticketsRouter(tickets, repOnly) {
-  const router = Router5();
+  const router = Router6();
   router.get("/summary", asyncHandler(async (_req, res) => {
     res.json({ open: await tickets.openCount() });
   }));
@@ -3505,21 +3633,22 @@ function ticketsRouter(tickets, repOnly) {
 // server/api/app.ts
 function createApp(deps) {
   const { config } = deps;
-  const app = express3();
+  const app = express4();
   app.disable("x-powered-by");
   app.set("trust proxy", config.trustProxy);
   app.use(securityHeaders(config.isProduction));
-  const api = Router6();
+  const api = Router7();
   api.use(cors(config.allowedOrigins));
   api.use(rateLimit({ name: "api", windowMs: 6e4, max: 600 }));
   const auth = deps.auth ?? null;
   const anyUser = requireRole(auth, ALL_ROLES);
-  api.use(["/sessions", "/meta", "/admin"], (_req, _res, next) => {
+  api.use(["/sessions", "/meta", "/admin", "/highlights"], (_req, _res, next) => {
     deps.admin.syncIfStale().then(() => next(), next);
   });
   api.use("/payslip", anyUser, payslipRouter(deps.extractPayslip));
+  if (deps.highlights) api.use("/admin/highlights", requireRole(auth, ["admin"]), highlightsAdminRouter(deps.highlights));
   api.use("/admin", requireRole(auth, ["admin"]), adminRouter(deps.admin, auth));
-  api.use(express3.json({ limit: "100kb" }));
+  api.use(express4.json({ limit: "100kb" }));
   api.use("/auth", authRouter(auth, config.isProduction));
   api.use("/sessions", anyUser, sessionsRouter(deps.sessions));
   api.use("/tickets", ticketsRouter(deps.tickets, requireRole(auth, ["rep", "admin"])));
@@ -3533,6 +3662,9 @@ function createApp(deps) {
   api.get("/meta", anyUser, (_req, res) => {
     res.json({ sampleEmployees: sampleEmployees(), rules: getRules() });
   });
+  api.get("/highlights", anyUser, asyncHandler(async (_req, res) => {
+    res.json(deps.highlights ? await deps.highlights.approved() : {});
+  }));
   api.use((_req, res) => {
     res.status(404).json({ error: "\u05E0\u05EA\u05D9\u05D1 \u05DC\u05D0 \u05E7\u05D9\u05D9\u05DD" });
   });
@@ -3560,6 +3692,20 @@ var PAYSLIP_PROMPT = `
 - childrenUpTo23: \u05DE\u05E1\u05E4\u05E8 \u05D9\u05DC\u05D3\u05D9\u05DD \u05E2\u05D3 \u05D2\u05D9\u05DC 23 \u05D0\u05DD \u05DE\u05D5\u05E4\u05D9\u05E2 (\u05DE\u05E1\u05E4\u05E8)
 
 \u05E2\u05D1\u05D5\u05E8 \u05DB\u05DC \u05E9\u05D3\u05D4 \u05D4\u05D7\u05D6\u05E8 \u05D0\u05D5\u05D1\u05D9\u05D9\u05E7\u05D8 \u05E2\u05DD { "value": \u05E2\u05E8\u05DA_\u05D0\u05D5_null, "confidence": "high"|"medium"|"low", "sourceQuote": "\u05E6\u05D9\u05D8\u05D5\u05D8 \u05DE\u05D4\u05DE\u05E1\u05DE\u05DA" }.
+`;
+var highlightsPrompt = (car) => `
+\u05D0\u05EA\u05D4 \u05E2\u05D5\u05D6\u05E8 \u05DC\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05DC\u05D1\u05D7\u05D5\u05E8 \u05E8\u05DB\u05D1 \u05E6\u05DE\u05D5\u05D3 \u05DE\u05D4\u05D7\u05D1\u05E8\u05D4.
+\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA 3 \u05D4\u05D9\u05EA\u05E8\u05D5\u05E0\u05D5\u05EA \u05D4\u05DE\u05E8\u05DB\u05D6\u05D9\u05D9\u05DD \u05D5\u05D0\u05EA 3 \u05D4\u05D7\u05E1\u05E8\u05D5\u05E0\u05D5\u05EA \u05D4\u05DE\u05E8\u05DB\u05D6\u05D9\u05D9\u05DD \u05E9\u05DC \u05D4\u05E8\u05DB\u05D1 \u05D4\u05D1\u05D0, \u05DE\u05E0\u05E7\u05D5\u05D3\u05EA \u05D4\u05DE\u05D1\u05D8 \u05E9\u05DC \u05E2\u05D5\u05D1\u05D3 \u05E9\u05E0\u05D5\u05D4\u05D2 \u05D1\u05D5 \u05DB\u05DC \u05D9\u05D5\u05DD
+(\u05E0\u05D5\u05D7\u05D5\u05EA, \u05DE\u05E8\u05D7\u05D1 \u05DC\u05E0\u05D5\u05E1\u05E2\u05D9\u05DD \u05D5\u05DC\u05DE\u05D8\u05E2\u05DF, \u05D1\u05D8\u05D9\u05D7\u05D5\u05EA, \u05E6\u05E8\u05D9\u05DB\u05EA \u05D3\u05DC\u05E7 \u05D0\u05D5 \u05D8\u05E2\u05D9\u05E0\u05D4, \u05D1\u05D9\u05E6\u05D5\u05E2\u05D9\u05DD, \u05D0\u05DE\u05D9\u05E0\u05D5\u05EA, \u05E0\u05D5\u05D7\u05D5\u05EA \u05D1\u05E2\u05D9\u05E8 \u05D5\u05D1\u05DB\u05D1\u05D9\u05E9).
+
+\u05E8\u05DB\u05D1: ${car.make} ${car.model}, \u05E9\u05E0\u05EA\u05D5\u05DF ${car.year}, \u05D4\u05E0\u05E2\u05D4: ${car.fuel}.
+
+\u05DB\u05DC\u05DC\u05D9\u05DD:
+- \u05DB\u05DC \u05E4\u05E8\u05D9\u05D8 \u05D4\u05D5\u05D0 \u05DE\u05E9\u05E4\u05D8 \u05E7\u05E6\u05E8 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA, \u05E2\u05D3 8 \u05DE\u05D9\u05DC\u05D9\u05DD.
+- \u05D1\u05DC\u05D9 \u05DE\u05E1\u05E4\u05E8\u05D9\u05DD, \u05E1\u05E4\u05E8\u05D5\u05EA, \u05DE\u05D7\u05D9\u05E8\u05D9\u05DD, \u05D0\u05D7\u05D5\u05D6\u05D9\u05DD \u05D0\u05D5 \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05DE\u05D3\u05D5\u05D9\u05E7\u05D9\u05DD (\u05DC\u05D0 \u05E7"\u05DE, \u05DC\u05D0 \u05DC\u05D9\u05D8\u05E8\u05D9\u05DD, \u05DC\u05D0 \u05DB\u05D5\u05D7 \u05E1\u05D5\u05E1, \u05DC\u05D0 \u05DB\u05D5\u05DB\u05D1\u05D9 \u05D1\u05D8\u05D9\u05D7\u05D5\u05EA).
+- \u05D1\u05DC\u05D9 \u05E9\u05DB\u05E8, \u05DE\u05E1 \u05D0\u05D5 \u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9.
+- \u05D0\u05DD \u05D0\u05D9\u05E0\u05DA \u05D1\u05D8\u05D5\u05D7 \u05D1\u05E4\u05E8\u05D8 \u05E2\u05DC \u05D4\u05D3\u05D2\u05DD, \u05DB\u05EA\u05D5\u05D1 \u05EA\u05DB\u05D5\u05E0\u05D4 \u05DB\u05DC\u05DC\u05D9\u05EA \u05E9\u05DC \u05E1\u05D5\u05D2 \u05D4\u05E8\u05DB\u05D1 \u05D5\u05D4\u05D4\u05E0\u05E2\u05D4 \u05E9\u05DC\u05D5, \u05D5\u05D0\u05DC \u05EA\u05DE\u05E6\u05D9\u05D0.
+\u05D4\u05D7\u05D6\u05E8 JSON \u05D1\u05DC\u05D1\u05D3: {"pros": ["...", "...", "..."], "cons": ["...", "...", "..."]}
 `;
 function toGeminiContents(messages) {
   return messages.map((m) => {
@@ -3655,6 +3801,23 @@ function createGemini(config) {
     });
     return JSON.parse(response.text || "{}");
   }
+  async function draftCarHighlights(car) {
+    const { response } = await generateWithFallback({
+      contents: [{ role: "user", parts: [{ text: highlightsPrompt(car) }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            pros: { type: "array", items: { type: "string" } },
+            cons: { type: "array", items: { type: "string" } }
+          },
+          required: ["pros", "cons"]
+        }
+      }
+    });
+    return JSON.parse(response.text || "{}");
+  }
   function status() {
     const now = Date.now();
     return {
@@ -3665,7 +3828,7 @@ function createGemini(config) {
       }))
     };
   }
-  return { generate, extractPayslip, status };
+  return { generate, extractPayslip, draftCarHighlights, status };
 }
 
 // server/data/tax-seed.json
@@ -4864,6 +5027,13 @@ var FileRepository = class {
     else delete data.reference[kind];
     await this.flush();
   }
+  async getCarHighlights() {
+    return structuredClone((await this.app()).highlights ?? []);
+  }
+  async saveCarHighlights(records) {
+    (await this.app()).highlights = structuredClone(records);
+    await this.flush();
+  }
   async saveTaxRecords(records) {
     const map = await this.taxMap();
     for (const r of records) map.set(r.key, r);
@@ -5115,6 +5285,13 @@ var SupabaseRepository = class {
     }
     await this.upsert("app_settings", { key: `data:${kind}`, value: rows, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
+  async getCarHighlights() {
+    const [row] = await this.rows("app_settings?key=eq.highlights&select=value");
+    return Array.isArray(row?.value) ? row.value : [];
+  }
+  async saveCarHighlights(records) {
+    await this.upsert("app_settings", { key: "highlights", value: records, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  }
   async saveTaxRecords(records) {
     for (let i = 0; i < records.length; i += TAX_BATCH) {
       await this.upsert(
@@ -5197,6 +5374,7 @@ async function buildApiApp(config) {
   await admin.init();
   const sessions = createSessionService(repo);
   const tickets = createTicketService(repo);
+  const highlights = createHighlightsService(repo, config.gemini.apiKey ? gemini.draftCarHighlights : null);
   const auth = authGateway ? createAuthService(authGateway, repo) : null;
   const app = createApp({
     config,
@@ -5204,6 +5382,7 @@ async function buildApiApp(config) {
     tickets,
     admin,
     auth,
+    highlights,
     extractPayslip: gemini.extractPayslip,
     healthDetails: () => ({ ...gemini.status(), storage: repo.kind })
   });
@@ -5286,7 +5465,7 @@ async function main() {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    app.use(express4.static(config.staticDir, { index: false, maxAge: "1h" }));
+    app.use(express5.static(config.staticDir, { index: false, maxAge: "1h" }));
     app.get("*", (_req, res) => {
       res.setHeader("Cache-Control", "no-cache");
       res.sendFile(path3.join(config.staticDir, "index.html"));
