@@ -36,4 +36,10 @@ describe('server configuration', () => {
     expect(warnings.join('\n')).toMatch(/GEMINI_API_KEY/);
     expect(warnings.join('\n')).toMatch(/VITE_SUPABASE_ANON_KEY/);
   });
+
+  it('the agent debug trace is on in development only, and AGENT_DEBUG_LOG=off silences it', () => {
+    expect(loadConfig({}).config.agentDebugLog).toBe(true);
+    expect(loadConfig({ AGENT_DEBUG_LOG: 'off' }).config.agentDebugLog).toBe(false);
+    expect(loadConfig(prod).config.agentDebugLog).toBe(false);
+  });
 });

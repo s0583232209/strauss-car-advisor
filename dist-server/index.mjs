@@ -8,83 +8,6 @@ import path3 from "node:path";
 // server/api/app.ts
 import express4, { Router as Router7 } from "express";
 
-// server/data/strauss-rules.json
-var strauss_rules_default = {
-  version: "mock-2026-10-12",
-  budgets: { \u05D0: 3500, \u05D1: 3700, \u05D2: 4500, \u05D3: 5200 },
-  groupOrder: ["\u05D0", "\u05D1", "\u05D2", "\u05D3"],
-  chooseFrom: "own_group_or_lower",
-  electric: { netBonus: 250, method: "gross_up" },
-  familyTrack: { minChildren: 4, childMaxAge: 23, carPrice: 6e3, gapSplitEmployee: 0.5 },
-  waiver: { allowedBy: "occupation", maintenanceIsTaxable: true, maintenanceIsPensionable: false },
-  unusedBudget: "not_paid",
-  netMethod: {
-    basis: "monthly",
-    taxYear: 2025,
-    creditPointValue: 242,
-    brackets: [
-      [7010, 0.1],
-      [10060, 0.14],
-      [16150, 0.2],
-      [22440, 0.31],
-      [46690, 0.35],
-      [60130, 0.47],
-      [null, 0.5]
-    ],
-    nationalInsurance: {
-      threshold: 7522,
-      ceiling: 50695,
-      lowRate: 0.0104,
-      highRate: 0.07
-    },
-    health: {
-      threshold: 7522,
-      ceiling: 50695,
-      lowRate: 0.0323,
-      highRate: 0.0517
-    },
-    pensionCredit: {
-      rate: 0.35,
-      incomeCeiling: 9500
-    }
-  },
-  valueOfUse: {
-    source: "\u05E8\u05E9\u05D5\u05EA \u05D4\u05DE\u05E1\u05D9\u05DD - \u05D4\u05E7\u05D5\u05D1\u05E5 \u05D4\u05DE\u05D5\u05E8\u05D7\u05D1 2026",
-    key: ["\u05E9\u05E0\u05EA \u05DE\u05E1", "\u05E9\u05E0\u05EA \u05E8\u05D9\u05E9\u05D5\u05DD", "\u05E7\u05D5\u05D3 \u05E1\u05D5\u05D2 \u05E8\u05DB\u05D1", "\u05E7\u05D5\u05D3 \u05EA\u05D5\u05E6\u05E8", "\u05E7\u05D5\u05D3 \u05D3\u05D2\u05DD"],
-    driveField: {
-      "0": "\u05D1\u05E0\u05D6\u05D9\u05DF",
-      "1": "\u05D4\u05D9\u05D1\u05E8\u05D9\u05D3\u05D9",
-      "2": "\u05E4\u05DC\u05D0\u05D2-\u05D0\u05D9\u05DF",
-      "3": "\u05D7\u05E9\u05DE\u05DC\u05D9"
-    }
-  }
-};
-
-// server/bl/engine/rules.ts
-var activeRules = JSON.parse(JSON.stringify(strauss_rules_default));
-function getRules() {
-  return activeRules;
-}
-function setRules(newRules) {
-  activeRules = JSON.parse(JSON.stringify(newRules));
-}
-function resetRules() {
-  activeRules = JSON.parse(JSON.stringify(strauss_rules_default));
-}
-function getGroupBudget(group) {
-  return activeRules.budgets[group] || 0;
-}
-function canSelectCarGroup(employeeGroup, carGroup) {
-  if (carGroup === "\u05DE\u05E9\u05E4\u05D7\u05EA\u05D9") {
-    return false;
-  }
-  const order = activeRules.groupOrder;
-  const empIdx = order.indexOf(employeeGroup);
-  const carIdx = order.indexOf(carGroup);
-  if (empIdx === -1 || carIdx === -1) return false;
-  return carIdx <= empIdx;
-}
-
 // server/bl/services/sessionService.ts
 import { randomInt, randomUUID } from "node:crypto";
 
@@ -722,6 +645,83 @@ function buildOpeningMessage(profile) {
   if (baseKnown) return `${intro} \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05DB\u05D1\u05E8 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1. \u05D1\u05D0\u05D9\u05D6\u05D5 \u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA (\u05D0\u2013\u05D3) \u05D0\u05EA\u05DD?`;
   if (groupKnown) return `${intro} \u05E7\u05D1\u05D5\u05E6\u05EA \u05D4\u05D6\u05DB\u05D0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1. \u05DE\u05D4 \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9 \u05E9\u05DC\u05DB\u05DD?`;
   return `${intro} \u05E0\u05EA\u05D7\u05D9\u05DC \u05DE\u05D4\u05E9\u05DB\u05E8: \u05D1\u05D0\u05D9\u05D6\u05D5 \u05E7\u05D1\u05D5\u05E6\u05EA \u05D6\u05DB\u05D0\u05D5\u05EA (\u05D0\u2013\u05D3) \u05D0\u05EA\u05DD \u05D5\u05DE\u05D4 \u05E9\u05DB\u05E8 \u05D4\u05D1\u05E1\u05D9\u05E1 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9?`;
+}
+
+// server/data/strauss-rules.json
+var strauss_rules_default = {
+  version: "mock-2026-10-12",
+  budgets: { \u05D0: 3500, \u05D1: 3700, \u05D2: 4500, \u05D3: 5200 },
+  groupOrder: ["\u05D0", "\u05D1", "\u05D2", "\u05D3"],
+  chooseFrom: "own_group_or_lower",
+  electric: { netBonus: 250, method: "gross_up" },
+  familyTrack: { minChildren: 4, childMaxAge: 23, carPrice: 6e3, gapSplitEmployee: 0.5 },
+  waiver: { allowedBy: "occupation", maintenanceIsTaxable: true, maintenanceIsPensionable: false },
+  unusedBudget: "not_paid",
+  netMethod: {
+    basis: "monthly",
+    taxYear: 2025,
+    creditPointValue: 242,
+    brackets: [
+      [7010, 0.1],
+      [10060, 0.14],
+      [16150, 0.2],
+      [22440, 0.31],
+      [46690, 0.35],
+      [60130, 0.47],
+      [null, 0.5]
+    ],
+    nationalInsurance: {
+      threshold: 7522,
+      ceiling: 50695,
+      lowRate: 0.0104,
+      highRate: 0.07
+    },
+    health: {
+      threshold: 7522,
+      ceiling: 50695,
+      lowRate: 0.0323,
+      highRate: 0.0517
+    },
+    pensionCredit: {
+      rate: 0.35,
+      incomeCeiling: 9500
+    }
+  },
+  valueOfUse: {
+    source: "\u05E8\u05E9\u05D5\u05EA \u05D4\u05DE\u05E1\u05D9\u05DD - \u05D4\u05E7\u05D5\u05D1\u05E5 \u05D4\u05DE\u05D5\u05E8\u05D7\u05D1 2026",
+    key: ["\u05E9\u05E0\u05EA \u05DE\u05E1", "\u05E9\u05E0\u05EA \u05E8\u05D9\u05E9\u05D5\u05DD", "\u05E7\u05D5\u05D3 \u05E1\u05D5\u05D2 \u05E8\u05DB\u05D1", "\u05E7\u05D5\u05D3 \u05EA\u05D5\u05E6\u05E8", "\u05E7\u05D5\u05D3 \u05D3\u05D2\u05DD"],
+    driveField: {
+      "0": "\u05D1\u05E0\u05D6\u05D9\u05DF",
+      "1": "\u05D4\u05D9\u05D1\u05E8\u05D9\u05D3\u05D9",
+      "2": "\u05E4\u05DC\u05D0\u05D2-\u05D0\u05D9\u05DF",
+      "3": "\u05D7\u05E9\u05DE\u05DC\u05D9"
+    }
+  }
+};
+
+// server/bl/engine/rules.ts
+var activeRules = JSON.parse(JSON.stringify(strauss_rules_default));
+function getRules() {
+  return activeRules;
+}
+function setRules(newRules) {
+  activeRules = JSON.parse(JSON.stringify(newRules));
+}
+function resetRules() {
+  activeRules = JSON.parse(JSON.stringify(strauss_rules_default));
+}
+function getGroupBudget(group) {
+  return activeRules.budgets[group] || 0;
+}
+function canSelectCarGroup(employeeGroup, carGroup) {
+  if (carGroup === "\u05DE\u05E9\u05E4\u05D7\u05EA\u05D9") {
+    return false;
+  }
+  const order = activeRules.groupOrder;
+  const empIdx = order.indexOf(employeeGroup);
+  const carIdx = order.indexOf(carGroup);
+  if (empIdx === -1 || carIdx === -1) return false;
+  return carIdx <= empIdx;
 }
 
 // server/data/occupation-aliases.json
@@ -1927,7 +1927,10 @@ async function executeTool(name, args, context) {
 }
 
 // server/bl/agent/debugLog.ts
-var ENABLED = process.env.NODE_ENV !== "production" && process.env.AGENT_DEBUG_LOG !== "off";
+var ENABLED = false;
+function configureDebugLog(enabled) {
+  ENABLED = enabled;
+}
 function tag() {
   const d = /* @__PURE__ */ new Date();
   const ms2 = String(d.getMilliseconds()).padStart(3, "0");
@@ -2671,6 +2674,9 @@ var toState = (s) => ({
 });
 function sampleEmployees() {
   return getEmployees().map((e) => ({ id: e.id, name: e.name, occupation: e.occupation, group: e.group }));
+}
+function referenceMeta() {
+  return { sampleEmployees: sampleEmployees(), rules: getRules() };
 }
 function createSessionService(repo, now = Date.now) {
   const msgId = (prefix) => `${prefix}-${randomUUID()}`;
@@ -3660,7 +3666,7 @@ function createApp(deps) {
     });
   });
   api.get("/meta", anyUser, (_req, res) => {
-    res.json({ sampleEmployees: sampleEmployees(), rules: getRules() });
+    res.json(referenceMeta());
   });
   api.get("/highlights", anyUser, asyncHandler(async (_req, res) => {
     res.json(deps.highlights ? await deps.highlights.approved() : {});
@@ -5370,6 +5376,7 @@ async function buildApiApp(config) {
   const authGateway = createAuthGateway(config);
   const gemini = createGemini(config.gemini);
   configureLlm({ transport: gemini.generate, fallback: config.fallback });
+  configureDebugLog(config.agentDebugLog);
   const admin = createAdminService(repo);
   await admin.init();
   const sessions = createSessionService(repo);
@@ -5422,6 +5429,7 @@ function loadConfig(env = process.env) {
     } : null,
     supabaseUrl: env.SUPABASE_URL || void 0,
     supabaseServiceKey: env.SUPABASE_SERVICE_ROLE_KEY || void 0,
+    agentDebugLog: !isProduction && env.AGENT_DEBUG_LOG !== "off",
     dataDir: path2.resolve(env.DATA_DIR || ".data"),
     staticDir: path2.resolve(env.STATIC_DIR || "dist")
   };

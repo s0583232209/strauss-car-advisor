@@ -10,8 +10,7 @@
 
 import type { Request, RequestHandler, Response } from 'express';
 import type { AuthUser, UserRole } from '../../shared/types.ts';
-import type { AuthService } from '../bl/services/authService.ts';
-import type { AuthTokens } from '../dal/index.ts';
+import type { AuthService, AuthTokens } from '../bl/services/authService.ts';
 
 export const ACCESS_COOKIE = 'yoetz_at';
 export const REFRESH_COOKIE = 'yoetz_rt';
