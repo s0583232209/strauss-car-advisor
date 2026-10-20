@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import catalogData from '../../data/catalog.json';
-import occupationsData from '../../data/occupations.json';
+import { getCatalog, getOccupations } from '../engine/referenceData.ts';
 import { canSelectCarGroup } from '../engine/rules.ts';
 import { buildScenario, findOccupation } from '../engine/scenario.ts';
 import { Car, ComparisonResult, EmployeeProfile, Occupation, ScenarioType } from '../engine/types.ts';
@@ -13,8 +12,6 @@ import { describeValue, extractNumbers, groupStated, normalizeField, normalizeGr
 import { getProfileFieldStatus } from './profileStatus.ts';
 import { AgentContext, MissingFieldInfo, ToolDefinition } from './types.ts';
 
-const carsCatalog = catalogData as Car[];
-const occupationsList = occupationsData as Occupation[];
 
 // "Missing" means not provided: 0 is a valid value (e.g. no commissions, no study fund)
 const isUnset = (v: unknown) => v === undefined || v === null || (typeof v === 'number' && !Number.isFinite(v));
@@ -108,7 +105,7 @@ const MAX_OCCUPATION_SUGGESTIONS = 5;
 
 /** Closest listed occupations to what the employee wrote ("מנהל" → every manager role) */
 function suggestOccupations(query: string): Occupation[] {
-  const scored = occupationsList
+  const scored = getOccupations()
     .map((o) => ({ o, score: nameScore(query, [o.occupation, o.occupation.replace(/\/(ית|ת|ה)(?=\s|$)/g, '')]) }))
     .sort((a, b) => b.score - a.score);
   // All names containing the query, else the closest few
@@ -501,7 +498,7 @@ export async function executeTool(
       }
       const filterType = args.type || 'all';
 
-      const eligibleCars = carsCatalog.filter((c) => {
+      const eligibleCars = getCatalog().filter((c) => {
         // Never show family cars outside family track
         if (c.group === 'משפחתי') return false;
         // Group check
@@ -549,7 +546,7 @@ export async function executeTool(
 
       // Demo mode check: "השתתפות ברכב החדש לפי אימות נציג"
       if (context.repParticipationMode && scType !== 'waive_car' && overridePart === undefined) {
-        const car = targetCarId ? carsCatalog.find((c) => c.id === targetCarId) : undefined;
+        const car = targetCarId ? getCatalog().find((c) => c.id === targetCarId) : undefined;
         const carName = car?.model || 'רכב חדש';
         const ticketId = await context.onEscalate(
           `אימות השתתפות עצמית עבור עובד/ת: ${context.profile.name || 'עובד'} בבחירת ${carName}`,

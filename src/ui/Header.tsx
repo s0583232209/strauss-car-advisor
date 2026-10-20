@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FileSpreadsheet, Headset, LogOut, MessageSquare, ShieldAlert } from 'lucide-react';
+import { FileSpreadsheet, Headset, LogOut, MessageSquare, ShieldAlert, UserPlus } from 'lucide-react';
 import React from 'react';
 import type { UserRole } from '../../shared/types.ts';
 import { AdvisorLogo, StraussLogo } from './CarDecor.tsx';
 
-export type ActiveScreen = 'employee' | 'rep' | 'admin';
+export type ActiveScreen = 'employee' | 'rep' | 'admin' | 'users';
 
-export const ALL_SCREENS: ActiveScreen[] = ['employee', 'rep', 'admin'];
+export const ALL_SCREENS: ActiveScreen[] = ['employee', 'rep', 'admin', 'users'];
 
 /** Screens each role may open. The server enforces the same split on the data (403). */
 export const SCREENS_BY_ROLE: Record<UserRole, ActiveScreen[]> = {
@@ -95,6 +95,13 @@ export const Header: React.FC<HeaderProps> = ({
                       <FileSpreadsheet className="w-4 h-4" />
                       <span className="hidden sm:inline">נתונים</span>
                       <span className="sm:hidden">ניהול</span>
+                    </button>
+                  )}
+
+                  {screens.includes('users') && (
+                    <button onClick={() => onNavigate('users')} className={navClass(activeScreen === 'users')}>
+                      <UserPlus className="w-4 h-4" />
+                      <span>משתמשים</span>
                     </button>
                   )}
                 </nav>

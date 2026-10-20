@@ -14,6 +14,7 @@ import { AdvisorLogo, HillsScene } from './ui/CarDecor.tsx';
 import { ActiveScreen, ALL_SCREENS, Header, SCREENS_BY_ROLE } from './ui/Header.tsx';
 import { NotFoundPage } from './ui/NotFoundPage.tsx';
 import { RepresentativeView } from './ui/RepresentativeView.tsx';
+import { UsersView } from './ui/UsersView.tsx';
 
 const LOGGED_OUT: AuthStatus = { enabled: true, user: null };
 
@@ -35,7 +36,7 @@ export default function App() {
   const userRole = auth?.user?.role ?? (auth && !auth.enabled ? 'admin' : null);
 
   // /:role/pagename — e.g. /employee/employee, /rep/rep, /admin/admin
-  const PAGE_MAP: Record<string, ActiveScreen> = { home: 'employee', rep: 'rep', admin: 'admin' };
+  const PAGE_MAP: Record<string, ActiveScreen> = { home: 'employee', rep: 'rep', admin: 'admin', users: 'users' };
 
   const screenFromPath = (): ActiveScreen | null => {
     const parts = window.location.pathname.split('/').filter(Boolean);
@@ -131,6 +132,8 @@ export default function App() {
         {!needsLogin && !is404 && !is403 && screen === 'rep' && <RepresentativeView />}
 
         {!needsLogin && !is404 && !is403 && screen === 'admin' && <AdminView />}
+
+        {!needsLogin && !is404 && !is403 && screen === 'users' && <UsersView />}
 
       </main>
 

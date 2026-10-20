@@ -11,7 +11,7 @@
  */
 
 import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
-import { Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
+import { ReferenceKind, Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 const TAX_BATCH = 1000;
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -173,6 +173,19 @@ export class SupabaseRepository implements Repository {
     await this.upsert('app_settings', { key: 'rules', value: rules, updated_at: new Date().toISOString() });
   }
 
+  async getReferenceData(kind: ReferenceKind): Promise<unknown[] | null> {
+    const [row] = await this.rows<any>(`app_settings?key=eq.data:${kind}&select=value`);
+    return Array.isArray(row?.value) ? row.value : null;
+  }
+
+  async saveReferenceData(kind: ReferenceKind, rows: unknown[] | null): Promise<void> {
+    if (rows === null) {
+      await this.request(`app_settings?key=eq.data:${kind}`, { method: 'DELETE' });
+      return;
+    }
+    await this.upsert('app_settings', { key: `data:${kind}`, value: rows, updated_at: new Date().toISOString() });
+  }
+
   async saveTaxRecords(records: TaxRecord[]): Promise<void> {
     for (let i = 0; i < records.length; i += TAX_BATCH) {
       await this.upsert(
@@ -228,5 +241,10 @@ export class SupabaseRepository implements Repository {
   async getUserRole(userId: string): Promise<UserRole | null> {
     const [row] = await this.rows<{ role: UserRole }>(`app_users?user_id=eq.${encodeURIComponent(userId)}&select=role`);
     return row?.role ?? null;
+  }
+
+  async setUserRole(userId: string, role: UserRole): Promise<void> {
+    // The auth trigger may already have added the row as 'employee': merge replaces the role
+    await this.upsert('app_users', { user_id: userId, role });
   }
 }

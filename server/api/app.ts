@@ -51,9 +51,14 @@ export function createApp(deps: AppDeps): express.Express {
   const auth = deps.auth ?? null;
   const anyUser = requireRole(auth, ALL_ROLES);
 
+  // Rules and data tables the admin saved on another instance (serverless): reloaded every 30 s at most
+  api.use(['/sessions', '/meta', '/admin'], (_req, _res, next) => {
+    deps.admin.syncIfStale().then(() => next(), next);
+  });
+
   // Routes with their own body parsers and limits come before the global JSON parser
   api.use('/payslip', anyUser, payslipRouter(deps.extractPayslip));
-  api.use('/admin', requireRole(auth, ['admin']), adminRouter(deps.admin));
+  api.use('/admin', requireRole(auth, ['admin']), adminRouter(deps.admin, auth));
 
   api.use(express.json({ limit: '100kb' }));
   api.use('/auth', authRouter(auth, config.isProduction));

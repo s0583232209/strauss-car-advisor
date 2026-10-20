@@ -10,6 +10,8 @@
 
 import type { ChatMessage, ComparisonResult, EmployeeProfile, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
 
+export type ReferenceKind = 'catalog' | 'occupations' | 'employees';
+
 export interface SessionRecord {
   id: string;
   /** The logged-in user who owns the conversation; absent only without login (development) */
@@ -58,6 +60,10 @@ export interface Repository {
   getRules(): Promise<Rules | null>;
   saveRules(rules: Rules | null): Promise<void>;
 
+  /** An uploaded reference table (catalog, occupations, employees); null = the built-in file */
+  getReferenceData(kind: ReferenceKind): Promise<unknown[] | null>;
+  saveReferenceData(kind: ReferenceKind, rows: unknown[] | null): Promise<void>;
+
   saveTaxRecords(records: TaxRecord[]): Promise<void>;
   getTaxRecord(key: string): Promise<VehicleLookupResult | null>;
   countTaxRecords(): Promise<number>;
@@ -65,6 +71,8 @@ export interface Repository {
 
   /** Role from app_users; null = no row (the user may not use the app) */
   getUserRole(userId: string): Promise<UserRole | null>;
+  /** Creates or replaces the user's app_users row */
+  setUserRole(userId: string, role: UserRole): Promise<void>;
 }
 
 /** Tokens from the identity provider; they go to the browser only as httpOnly cookies */
@@ -78,6 +86,10 @@ export interface AuthTokens {
 
 export type AuthAttempt = { ok: true; tokens: AuthTokens } | { ok: false; reason: 'invalid' | 'rate_limited' };
 
+export type CreateUserAttempt =
+  | { ok: true; user: { id: string; email: string } }
+  | { ok: false; reason: 'exists' | 'weak_password' | 'invalid' };
+
 /** Identity provider (Supabase Auth). Network failures throw; wrong credentials do not. */
 export interface AuthGateway {
   signInWithPassword(email: string, password: string): Promise<AuthAttempt>;
@@ -86,6 +98,10 @@ export interface AuthGateway {
   getUser(accessToken: string): Promise<{ id: string; email: string } | null>;
   /** Revokes the refresh token behind this access token (best effort) */
   signOut(accessToken: string): Promise<void>;
+  /** Admin: a new confirmed user with a password (needs the service role key) */
+  createUser(email: string, password: string): Promise<CreateUserAttempt>;
+  /** Admin: removes a user (used to undo a half-created user) */
+  deleteUser(userId: string): Promise<void>;
 }
 
 export const toLookupResult = (r: TaxRecord): VehicleLookupResult => ({

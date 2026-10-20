@@ -8,7 +8,7 @@ import { SupabaseAuthGateway } from './supabaseAuth.ts';
 import { SupabaseRepository } from './supabaseRepository.ts';
 import { AuthGateway, Repository } from './types.ts';
 
-export type { AuthGateway, AuthTokens, Repository, SessionRecord, TaxRecord } from './types.ts';
+export type { AuthGateway, AuthTokens, CreateUserAttempt, Repository, SessionRecord, TaxRecord } from './types.ts';
 
 /** Supabase Auth when Supabase is configured; null = no login (development with the file store) */
 export function createAuthGateway(env: { supabaseUrl?: string; supabaseServiceKey?: string }): AuthGateway | null {

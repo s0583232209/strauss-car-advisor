@@ -10,7 +10,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { AuthUser } from '../../../shared/types.ts';
+import type { AuthUser, UserRole } from '../../../shared/types.ts';
 import type { AuthGateway, AuthTokens, Repository } from '../../dal/index.ts';
 
 /** Error with a status and a message the employee may see */
@@ -32,6 +32,8 @@ export interface AuthService {
   /** New tokens from a refresh token; null when it is invalid or used */
   refresh(refreshToken: string): Promise<AuthResult | null>;
   logout(accessToken: string): Promise<void>;
+  /** Admin: a new user who can log in at once with this password and role */
+  createUser(email: string, password: string, role: UserRole): Promise<AuthUser>;
 }
 
 const VERIFY_CACHE_MS = 60_000;
@@ -41,7 +43,7 @@ const tokenKey = (token: string) => createHash('sha256').update(token).digest('b
 
 export function createAuthService(
   gateway: AuthGateway,
-  repo: Pick<Repository, 'getUserRole'>,
+  repo: Pick<Repository, 'getUserRole' | 'setUserRole'>,
   now: () => number = Date.now
 ): AuthService {
   const cache = new Map<string, { user: AuthUser; until: number }>();
@@ -102,6 +104,23 @@ export function createAuthService(
     async logout(accessToken) {
       cache.delete(tokenKey(accessToken));
       await gateway.signOut(accessToken);
+    },
+
+    async createUser(email, password, role) {
+      const created = await gateway.createUser(email, password);
+      if (!created.ok) {
+        if (created.reason === 'exists') throw new AuthError(409, 'כבר קיים משתמש עם האימייל הזה');
+        if (created.reason === 'weak_password') throw new AuthError(400, 'הסיסמה חלשה מדי. בחרו סיסמה ארוכה ומגוונת יותר.');
+        throw new AuthError(400, 'לא ניתן ליצור משתמש עם הפרטים האלה');
+      }
+      try {
+        await repo.setUserRole(created.user.id, role);
+      } catch (err) {
+        // Without a role the user could never log in: undo, so the admin can simply try again
+        await gateway.deleteUser(created.user.id).catch(() => undefined);
+        throw err;
+      }
+      return { id: created.user.id, email: created.user.email, role };
     },
   };
 }

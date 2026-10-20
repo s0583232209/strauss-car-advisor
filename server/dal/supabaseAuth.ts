@@ -9,7 +9,7 @@
  * Request and response bodies hold credentials and are never logged.
  */
 
-import type { AuthAttempt, AuthGateway } from './types.ts';
+import type { AuthAttempt, AuthGateway, CreateUserAttempt } from './types.ts';
 
 interface GoTrueSession {
   access_token: string;
@@ -65,5 +65,34 @@ export class SupabaseAuthGateway implements AuthGateway {
   async signOut(accessToken: string): Promise<void> {
     // Already-expired tokens answer 401: the cookies are cleared either way
     await this.fetch('logout?scope=local', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => undefined);
+  }
+
+  // The admin endpoints accept only the service role key as the bearer token
+  private admin(pathAndQuery: string, init: RequestInit): Promise<Response> {
+    return this.fetch(`admin/${pathAndQuery}`, { ...init, headers: { Authorization: `Bearer ${this.apiKey}` } });
+  }
+
+  async createUser(email: string, password: string): Promise<CreateUserAttempt> {
+    const res = await this.admin('users', { method: 'POST', body: JSON.stringify({ email, password, email_confirm: true }) });
+    if (res.ok) {
+      const u = (await res.json()) as { id: string; email?: string };
+      return { ok: true, user: { id: u.id, email: u.email ?? email } };
+    }
+    if (res.status === 400 || res.status === 409 || res.status === 422) {
+      // Only the error code is read; the message is not logged
+      const body = (await res.json().catch(() => ({}))) as { error_code?: string; code?: string; msg?: string };
+      const code = body.error_code ?? body.code ?? '';
+      if (code === 'email_exists' || code === 'user_already_exists' || /already been registered/i.test(body.msg ?? '')) {
+        return { ok: false, reason: 'exists' };
+      }
+      if (code === 'weak_password') return { ok: false, reason: 'weak_password' };
+      return { ok: false, reason: 'invalid' };
+    }
+    throw new Error(`Supabase Auth create user failed (${res.status})`);
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    const res = await this.admin(`users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404) throw new Error(`Supabase Auth delete user failed (${res.status})`);
   }
 }

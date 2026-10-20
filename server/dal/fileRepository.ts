@@ -12,12 +12,14 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ChatMessage, Rules, SupportTicket, UserRole, VehicleLookupResult } from '../../shared/types.ts';
-import { Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
+import { ReferenceKind, Repository, SessionRecord, TaxRecord, toLookupResult } from './types.ts';
 
 interface AppData {
   sessions: Record<string, SessionRecord>;
   tickets: SupportTicket[];
   rules: Rules | null;
+  /** Uploaded reference tables (absent in files written before uploads existed) */
+  reference?: Partial<Record<ReferenceKind, unknown[]>>;
 }
 
 const emptyData = (): AppData => ({ sessions: {}, tickets: [], rules: null });
@@ -136,6 +138,19 @@ export class FileRepository implements Repository {
     await this.flush();
   }
 
+  async getReferenceData(kind: ReferenceKind): Promise<unknown[] | null> {
+    const rows = (await this.app()).reference?.[kind];
+    return rows ? structuredClone(rows) : null;
+  }
+
+  async saveReferenceData(kind: ReferenceKind, rows: unknown[] | null): Promise<void> {
+    const data = await this.app();
+    data.reference ??= {};
+    if (rows) data.reference[kind] = structuredClone(rows);
+    else delete data.reference[kind];
+    await this.flush();
+  }
+
   async saveTaxRecords(records: TaxRecord[]): Promise<void> {
     const map = await this.taxMap();
     for (const r of records) map.set(r.key, r);
@@ -154,6 +169,10 @@ export class FileRepository implements Repository {
   // Users live in Supabase Auth only: the file store has none (login needs Supabase)
   async getUserRole(_userId: string): Promise<UserRole | null> {
     return null;
+  }
+
+  async setUserRole(_userId: string, _role: UserRole): Promise<void> {
+    throw new Error('Users need Supabase: the file store has no users');
   }
 
   async clearTaxRecords(): Promise<void> {
