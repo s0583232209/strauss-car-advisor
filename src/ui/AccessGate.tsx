@@ -8,6 +8,15 @@ import React, { useState } from 'react';
 import type { AuthUser } from '../../shared/types.ts';
 import { api } from '../api/client.ts';
 
+// Temporary test users for the hackathon team (public on purpose); delete this list to hide the box
+const DEMO_PASSWORD = '123456';
+const DEMO_USERS: Array<{ email: string; role: string }> = [
+  { email: 'employee1@example.com', role: 'עובד' },
+  { email: 'employee2@example.com', role: 'עובד' },
+  { email: 'rep@example.com', role: 'נציג שכר' },
+  { email: 'admin@example.com', role: 'מנהל' },
+];
+
 interface AccessGateProps {
   onLoggedIn: (user: AuthUser) => void;
 }
@@ -87,6 +96,37 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onLoggedIn }) => {
           {busy ? 'נכנסים...' : 'כניסה'}
         </button>
       </form>
+
+      {DEMO_USERS.length > 0 && (
+        <div className="mt-4 bg-white rounded-2xl border border-line shadow-xs p-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-ink">משתמשי בדיקה לצוות ההאקתון</h3>
+            <p className="text-xs text-slate-500">
+              בינתיים אפשר להיכנס עם אחד המשתמשים האלה. הסיסמה של כולם:{' '}
+              <span dir="ltr" className="font-mono font-semibold text-slate-700">{DEMO_PASSWORD}</span>
+            </p>
+          </div>
+          <ul className="space-y-1.5">
+            {DEMO_USERS.map((u) => (
+              <li key={u.email}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail(u.email);
+                    setPassword(DEMO_PASSWORD);
+                    setError(null);
+                  }}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-line hover:border-brand hover:bg-brand/5 transition-colors text-xs"
+                >
+                  <span className="font-semibold text-slate-700">{u.role}</span>
+                  <span dir="ltr" className="font-mono text-slate-600">{u.email}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-slate-400">לחיצה על משתמש ממלאת את הטופס</p>
+        </div>
+      )}
     </div>
   );
 };
