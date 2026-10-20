@@ -14,11 +14,13 @@ import { getEmployees } from '../engine/referenceData.ts';
 import { runAgentTurn } from '../agent/loop.ts';
 import { buildOpeningMessage } from '../agent/profileStatus.ts';
 import { getMissingFields } from '../agent/tools.ts';
+import { getRules } from '../engine/rules.ts';
 import { buildScenario } from '../engine/scenario.ts';
 import type {
   ChatMessage,
   ComparisonResult,
   EmployeeProfile,
+  Rules,
   SampleEmployee,
   SessionState,
   SupportTicket,
@@ -57,6 +59,11 @@ const toState = (s: SessionRecord): SessionState => ({
 
 export function sampleEmployees(): SampleEmployee[] {
   return getEmployees().map((e) => ({ id: e.id!, name: e.name!, occupation: e.occupation!, group: e.group }));
+}
+
+/** Reference data for the client screens (GET /api/meta): sample employees and the rules the engine uses now */
+export function referenceMeta(): { sampleEmployees: SampleEmployee[]; rules: Rules } {
+  return { sampleEmployees: sampleEmployees(), rules: getRules() };
 }
 
 export function createSessionService(repo: Repository, now: () => number = Date.now) {

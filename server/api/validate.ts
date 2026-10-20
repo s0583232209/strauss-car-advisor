@@ -6,7 +6,7 @@
 /** Input validation for every API body and parameter (unknown fields are rejected) */
 
 import type { CarHighlights, EmployeeProfile, UserRole } from '../../shared/types.ts';
-import { PAYSLIP_FIELDS } from '../bl/agent/extract.ts';
+import { PAYSLIP_FIELDS } from '../bl/services/payslipService.ts';
 import { MAX_HIGHLIGHT_LENGTH, MAX_HIGHLIGHTS } from '../bl/services/highlightsService.ts';
 import { HttpError } from './middleware.ts';
 

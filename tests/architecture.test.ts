@@ -55,6 +55,37 @@ describe('3-tier boundaries', () => {
     expect([...bl, ...dal]).toEqual([]);
   });
 
+  it('the API layer reaches the business logic only through bl/services and never imports the DAL', () => {
+    const offenders = sourceFiles('server/api').flatMap((f) =>
+      importsOf(f)
+        .filter((t) => t.startsWith('server/dal/') || (t.startsWith('server/bl/') && !t.startsWith('server/bl/services/')))
+        .map((t) => `${f} → ${t}`)
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('only server/config.ts reads environment variables', () => {
+    const offenders = sourceFiles('server').filter(
+      (f) => f.replace(/\\/g, '/') !== 'server/config.ts' && /process\.env/.test(readFileSync(f, 'utf8'))
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('the client writes no amounts or rates of its own: they come from the server (rules, comparison)', () => {
+    // A number next to ₪, or a decimal percent, in code or JSX text. Comments and input placeholders
+    // (example hints for the user) are skipped.
+    const amount = /\d[\d,]*(\.\d+)?\s*₪|₪\s*\d|\d+\.\d+%/;
+    const offenders = sourceFiles('src').flatMap((f) =>
+      readFileSync(f, 'utf8')
+        .replace(/placeholder=("[^"]*"|'[^']*'|\{[^}]*\})/g, '')
+        .split('\n')
+        .map((line, i) => ({ line: line.trim(), at: `${f}:${i + 1}` }))
+        .filter(({ line }) => !/^(\/\/|\/\*|\*)/.test(line) && amount.test(line))
+        .map(({ line, at }) => `${at}: ${line}`)
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it('the client never reads server secrets or VITE_ secrets', () => {
     for (const f of sourceFiles('src')) {
       const text = readFileSync(f, 'utf8');

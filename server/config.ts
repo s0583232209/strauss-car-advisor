@@ -20,6 +20,8 @@ export interface ServerConfig {
   allowedOrigins: string[];
   gemini: { apiKey: string; models: string[]; modelTimeoutMs: number };
   fallback: { baseUrl: string; apiKey: string; model: string } | null;
+  /** Agent debug trace on the server console: never in production; AGENT_DEBUG_LOG=off silences it in development */
+  agentDebugLog: boolean;
   supabaseUrl?: string;
   supabaseServiceKey?: string;
   dataDir: string;
@@ -63,6 +65,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Serv
         : null,
     supabaseUrl: env.SUPABASE_URL || undefined,
     supabaseServiceKey: env.SUPABASE_SERVICE_ROLE_KEY || undefined,
+    agentDebugLog: !isProduction && env.AGENT_DEBUG_LOG !== 'off',
     dataDir: path.resolve(env.DATA_DIR || '.data'),
     staticDir: path.resolve(env.STATIC_DIR || 'dist'),
   };

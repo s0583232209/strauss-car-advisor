@@ -12,8 +12,13 @@ import { EmployeeProfile } from '../engine/types.ts';
 import { getProfileFieldStatus } from './profileStatus.ts';
 import { getMissingFields } from './tools.ts';
 
-// Server console only, never in production (AGENT_DEBUG_LOG=off silences it in development too)
-const ENABLED = process.env.NODE_ENV !== 'production' && process.env.AGENT_DEBUG_LOG !== 'off';
+// Server console only; off until bootstrap turns it on from config (config.agentDebugLog)
+let ENABLED = false;
+
+/** Called once at startup with config.agentDebugLog (server/config.ts is the only reader of env vars) */
+export function configureDebugLog(enabled: boolean): void {
+  ENABLED = enabled;
+}
 /** "[agent 14:03:27.512]": wall-clock time on every line */
 function tag(): string {
   const d = new Date();

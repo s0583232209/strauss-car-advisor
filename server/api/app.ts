@@ -10,11 +10,10 @@
 
 import express, { Router } from 'express';
 import type { ServerConfig } from '../config.ts';
-import { getRules } from '../bl/engine/rules.ts';
 import type { AdminService } from '../bl/services/adminService.ts';
 import type { AuthService } from '../bl/services/authService.ts';
 import type { HighlightsService } from '../bl/services/highlightsService.ts';
-import { sampleEmployees, type SessionService } from '../bl/services/sessionService.ts';
+import { referenceMeta, type SessionService } from '../bl/services/sessionService.ts';
 import type { TicketService } from '../bl/services/ticketService.ts';
 import { ALL_ROLES, requireRole } from './authCookies.ts';
 import { asyncHandler, cors, errorHandler, rateLimit, securityHeaders } from './middleware.ts';
@@ -80,7 +79,7 @@ export function createApp(deps: AppDeps): express.Express {
 
   // Reference data for the employee and guide screens (sample employees and rules)
   api.get('/meta', anyUser, (_req, res) => {
-    res.json({ sampleEmployees: sampleEmployees(), rules: getRules() });
+    res.json(referenceMeta());
   });
 
   // Approved pros and cons of the catalog cars, by car id (shown beside the comparison)

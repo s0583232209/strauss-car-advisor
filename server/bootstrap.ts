@@ -10,6 +10,7 @@
 
 import type express from 'express';
 import { createApp } from './api/app.ts';
+import { configureDebugLog } from './bl/agent/debugLog.ts';
 import { configureLlm } from './bl/agent/llm.ts';
 import { createGemini } from './bl/llm/gemini.ts';
 import { createAdminService } from './bl/services/adminService.ts';
@@ -32,6 +33,7 @@ export async function buildApiApp(config: ServerConfig): Promise<{ app: express.
   // Business Logic Layer
   const gemini = createGemini(config.gemini);
   configureLlm({ transport: gemini.generate, fallback: config.fallback });
+  configureDebugLog(config.agentDebugLog);
   const admin = createAdminService(repo);
   await admin.init();
   const sessions = createSessionService(repo);

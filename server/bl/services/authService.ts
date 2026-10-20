@@ -13,6 +13,9 @@ import { createHash } from 'node:crypto';
 import type { AuthUser, UserRole } from '../../../shared/types.ts';
 import type { AuthGateway, AuthTokens, Repository } from '../../dal/index.ts';
 
+// The API layer gets the token shape from here, never from the DAL
+export type { AuthTokens };
+
 /** Error with a status and a message the employee may see */
 export class AuthError extends Error {
   constructor(readonly status: number, message: string) {

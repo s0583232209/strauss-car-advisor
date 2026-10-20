@@ -12,7 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import type { CarHighlights, ChatMessage, ComparisonResult,EmployeeProfile, SessionState } from '../../shared/types.ts';
+import type { CarHighlights, ChatMessage, ComparisonResult,EmployeeProfile, Rules, SessionState } from '../../shared/types.ts';
 import { api } from '../api/client.ts';
 import { AdvisorLogo, Pinwheel } from './CarDecor.tsx';
 import { ComparisonCard } from './ComparisonCard.tsx';
@@ -115,9 +115,13 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
   // Approved pros and cons of the catalog cars; fetched again with each new comparison (the admin may
   // have approved more). Without them the card shows the money comparison only.
   const [carHighlights, setCarHighlights] = useState<Record<string, CarHighlights>>({});
+  // The rules behind the card's amounts and source notes (EV refund, tax year, NI rates); fetched with the
+  // highlights since the admin may have uploaded new rules. Without them the card leaves those lines out.
+  const [rules, setRules] = useState<Rules | undefined>(undefined);
   useEffect(() => {
     if (!lastComparison) return;
     api.highlights().then(setCarHighlights).catch(() => undefined);
+    api.meta().then((m) => setRules(m.rules)).catch(() => undefined);
   }, [lastComparison]);
 
   // Rep answers arrive through the server: poll while idle and show new messages
@@ -354,6 +358,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
           <div className={`lg:col-span-12 lg:order-3 ${calcCols} xl:order-2 min-w-0`}>
             <ComparisonCard
               comparison={lastComparison}
+              rules={rules}
               highlights={{
                 today: profile.hasCar && profile.currentCarId ? carHighlights[profile.currentCarId] : undefined,
                 alt:

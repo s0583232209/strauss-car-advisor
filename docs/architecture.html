@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ארכיטקטורה · יועץ הרכב של שטראוס</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F4F6F9; --card: #FFFFFF; --ink: #1A202C; --muted: #64748B; --line: #E2E8F0;
+    --red: #ED3024; --blue: #0390CB; --blue-deep: #0A6EA8; --green: #78A12F; --orange: #F48326; --sky: #00BAE2;
+    --z-browser: #E3F4FB; --z-server: #FDECEA; --z-google: #FEF0E4; --z-db: #F1F7E2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1720; --card: #17212C; --ink: #E8EDF3; --muted: #9AA8B8; --line: #2A3746;
+      --z-browser: #0F2A38; --z-server: #34191A; --z-google: #36261A; --z-db: #232E17;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Rubik, Heebo, system-ui, sans-serif; line-height: 1.55; }
+  header { background: var(--blue-deep); color: #fff; padding: 28px 16px 34px; position: relative; }
+  header::after { content: ""; position: absolute; inset: auto 0 0 0; height: 6px;
+    background: linear-gradient(90deg, var(--red), var(--orange), #C7DE8D, var(--green)); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+  header h1 { margin: 0; font-size: 30px; font-weight: 800; }
+  header p { margin: 6px 0 0; opacity: .92; }
+  nav { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  nav a { color: #fff; text-decoration: none; background: rgb(255 255 255 / .15); padding: 6px 14px; border-radius: 999px; font-size: 14px; }
+  nav a:hover { background: rgb(255 255 255 / .28); }
+  section { margin: 34px auto; }
+  h2 { font-size: 22px; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; }
+
+  /* Diagram 1: tiers */
+  .diagram { display: grid; grid-template-columns: 1fr 240px; gap: 18px; align-items: start; }
+  @media (max-width: 860px) { .diagram { grid-template-columns: 1fr; } }
+  /* Grid and flex children may shrink below their content; long code names wrap instead of widening the page */
+  .diagram > *, .stack > *, .inner > *, .flow > *, .legend > * { min-width: 0; }
+  code { overflow-wrap: anywhere; }
+  .stack { display: flex; flex-direction: column; align-items: stretch; }
+  .zone { border-radius: 18px; padding: 14px; position: relative; }
+  .zone > .tag { position: absolute; top: -11px; right: 16px; font-size: 12px; font-weight: 700; padding: 2px 10px;
+    border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+  .z-browser { background: var(--z-browser); }
+  .z-server { background: var(--z-server); padding-top: 20px; }
+  .z-db { background: var(--z-db); }
+  .z-google { background: var(--z-google); }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 4px 16px rgb(0 0 0 / .05); }
+  .box h3 { margin: 0 0 4px; font-size: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .box p { margin: 0; font-size: 14px; color: var(--muted); }
+  .box code, .step code, .legend code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; direction: ltr; unicode-bidi: embed;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; color: var(--ink); }
+  .chip { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; color: #fff; }
+  .c-red { background: var(--red); } .c-blue { background: var(--blue); } .c-green { background: var(--green); } .c-orange { background: var(--orange); }
+  .tier { border-top: 4px solid var(--red); }
+  .tier.blue { border-top-color: var(--blue); } .tier.green { border-top-color: var(--green); } .tier.orange { border-top-color: var(--orange); }
+  .inner { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  @media (max-width: 640px) { .inner { grid-template-columns: 1fr; } }
+  .inner .box { box-shadow: none; background: var(--bg); }
+  .arrow { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 0; color: var(--muted); font-size: 13px; }
+  .arrow::before { content: ""; width: 2px; height: 26px; background: var(--muted); border-radius: 1px; }
+  .arrow::after { content: "▼"; font-size: 11px; margin-right: -14px; order: -1; transform: translateY(15px); }
+  .side { display: flex; flex-direction: column; gap: 18px; }
+  .gemini-link { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .rule { margin-top: 10px; font-size: 13px; background: var(--card); border: 1px dashed var(--red); border-radius: 12px; padding: 8px 12px; }
+
+  /* Diagram 2: one question */
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; counter-reset: s; }
+  @media (max-width: 900px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .flow { grid-template-columns: 1fr; } }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; position: relative; counter-increment: s; }
+  .step::before { content: counter(s); position: absolute; top: -12px; right: 14px; width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff; background: var(--blue); }
+  .step.llm::before { background: var(--orange); } .step.engine::before { background: var(--green); } .step.db::before { background: var(--red); }
+  .step h3 { margin: 6px 0 4px; font-size: 15px; } .step p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .where { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+
+  .legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 720px) { .legend { grid-template-columns: 1fr 1fr; } }
+  .legend .zone { padding: 14px; font-size: 14px; }
+  .legend b { display: block; margin-bottom: 4px; }
+  footer { color: var(--muted); font-size: 13px; padding: 10px 16px 40px; text-align: center; }
+  a { color: var(--blue); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>ארכיטקטורה · יועץ הרכב של שטראוס</h1>
+    <p>צ׳אטבוט בעברית שמשווה את הנטו החודשי בין חלופות רכב חברה. שירות Node אחד, שלוש שכבות, Gemini ו-Supabase.</p>
+    <nav>
+      <a href="#tiers">שכבות ורכיבים</a>
+      <a href="#flow">מסלול של שאלה אחת</a>
+      <a href="#where">מה רץ איפה</a>
+      <a href="https://github.com/s0583232209/strauss-car-advisor">הקוד ב-GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="tiers">
+    <h2>שכבות ורכיבים</h2>
+    <p class="lead">הדפדפן מדבר רק עם <code dir="ltr">/api</code>. כל שכבה פונה רק לשכבה שמתחתיה, והמבחן <code>tests/architecture.test.ts</code> אוכף את זה.</p>
+
+    <div class="diagram">
+      <div class="stack">
+        <div class="zone z-browser"><span class="tag">דפדפן</span>
+          <div class="box tier blue">
+            <h3>לקוח · React + Tailwind <span class="chip c-blue">src/</span></h3>
+            <p>מסכים לפי תפקיד: עובד (צ׳אט, כרטיס השוואה, פרופיל), נציג שכר, מנהל. כל הקריאות לשרת עוברות דרך <code>src/api/client.ts</code>. אין בלקוח סודות, חישובים או סכומים קבועים.</p>
+          </div>
+        </div>
+
+        <div class="arrow">HTTPS · JSON · עוגיית התחברות httpOnly</div>
+
+        <div class="zone z-server"><span class="tag">שרת Node (Express)</span>
+          <div class="box tier">
+            <h3>API <span class="chip c-red">server/api</span></h3>
+            <p>בדיקת כל קלט, הגבלת קצב, CORS, התחברות והרשאות: עובד / נציג / מנהל. נתיבים: <code>/sessions</code> <code>/tickets</code> <code>/admin</code> <code>/highlights</code> <code>/auth</code>.</p>
+          </div>
+
+          <div class="arrow">רק דרך השירותים</div>
+
+          <div class="box tier orange">
+            <h3>לוגיקה עסקית <span class="chip c-orange">server/bl</span></h3>
+            <div class="inner">
+              <div class="box">
+                <h3>שירותים</h3>
+                <p>שיחות, פניות לנציג, ניהול נתונים, יתרונות וחסרונות, התחברות.</p>
+              </div>
+              <div class="box">
+                <h3>סוכן</h3>
+                <p>לולאת כלים: <code>update_profile</code> <code>find_car</code> <code>list_options</code> <code>run_comparison</code> <code>escalate_to_rep</code>. שומר מספרים (<code>guard.ts</code>).</p>
+              </div>
+              <div class="box">
+                <h3>מנוע שכר</h3>
+                <p>TypeScript טהור: מס הכנסה, ביטוח לאומי, שווי שימוש, נטו. כל סכום ושיעור נקרא מ-<code>strauss-rules.json</code>.</p>
+              </div>
+            </div>
+            <div class="rule">המודל לא מחשב ולא ממציא מספרים: הוא קורא לכלי המנוע ומסביר את התוצאה. מספר שלא הגיע מהכלים או מהעובד נחסם.</div>
+          </div>
+
+          <div class="arrow">ממשק <code>Repository</code></div>
+
+          <div class="box tier green">
+            <h3>גישה לנתונים <span class="chip c-green">server/dal</span></h3>
+            <p>מימוש Supabase (בייצור), או קובצי JSON מקומיים (בפיתוח בלבד).</p>
+          </div>
+        </div>
+
+        <div class="arrow">REST · service role key, רק מהשרת</div>
+
+        <div class="zone z-db"><span class="tag">Supabase</span>
+          <div class="box tier green">
+            <h3>Postgres + Auth</h3>
+            <p>טבלאות: <code>sessions</code> <code>messages</code> <code>tickets</code> <code>app_users</code> (תפקידים) <code>app_settings</code> (כללים, קטלוג, יתרונות וחסרונות) <code>tax_records</code> (שווי שימוש מרשות המסים). RLS פעיל, אין גישה אנונימית.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="zone z-google"><span class="tag">Google</span>
+          <div class="box tier orange">
+            <h3>Gemini API</h3>
+            <p>נקרא רק מהשרת (<code>server/bl/llm/gemini.ts</code>): רשימת מודלים לפי סדר עם מעבר אוטומטי לבא בתור, ומגבלת זמן לכל תור של הסוכן.</p>
+          </div>
+          <div class="gemini-link">◀ הסוכן שולח בקשות וקריאות לכלים, ומקבל טקסט והחלטות על כלים</div>
+        </div>
+        <div class="zone z-server"><span class="tag">בשרת, בקבצים</span>
+          <div class="box">
+            <h3>ערכי ברירת מחדל</h3>
+            <p><code>server/data/</code>: כללים, קטלוג רכבים, עיסוקים ועובדים לדוגמה. המנהל מחליף אותם בהעלאת קובץ, והגרסה החדשה נשמרת ב-Supabase.</p>
+          </div>
+        </div>
+        <div class="zone z-browser"><span class="tag">טיפוסים משותפים</span>
+          <div class="box">
+            <h3><code>shared/types.ts</code></h3>
+            <p>טיפוסים בלבד, משותפים ללקוח ולשרת. אין בו קוד שרץ.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2>מסלול של שאלה אחת</h2>
+    <p class="lead">"כמה נטו ארוויח אם אעבור ל-MG4?": מהצ׳אט ועד כרטיס ההשוואה.</p>
+    <div class="flow">
+      <div class="step"><h3>העובד שולח הודעה</h3><p><code dir="ltr">POST /api/sessions/:id/messages</code>. הסטטוס של הסוכן חוזר תוך כדי עבודה.</p><span class="where">דפדפן</span></div>
+      <div class="step"><h3>API בודק</h3><p>עוגיית התחברות, תפקיד, בעלות על השיחה, תקינות הקלט והגבלת קצב.</p><span class="where">server/api</span></div>
+      <div class="step"><h3>שירות השיחות</h3><p>טוען את השיחה והפרופיל, ומפעיל תור של הסוכן.</p><span class="where">server/bl/services</span></div>
+      <div class="step llm"><h3>Gemini מחליט</h3><p>מבין את הבקשה ומחזיר קריאה לכלי: <code>run_comparison</code> עם הרכב שנבחר.</p><span class="where">Gemini API</span></div>
+      <div class="step engine"><h3>המנוע מחשב</h3><p>שווי שימוש, מס, ביטוח לאומי, החזר טעינה ונטו, לפי הכללים הנוכחיים.</p><span class="where">server/bl/engine</span></div>
+      <div class="step llm"><h3>Gemini מסביר</h3><p>מקבל את תוצאת הכלי, וכותב הסבר בעברית פשוטה.</p><span class="where">Gemini API</span></div>
+      <div class="step"><h3>שומר המספרים</h3><p>כל מספר בתשובה חייב להגיע מהכלים, מהעובד או מהפרופיל. אחרת התשובה נחסמת.</p><span class="where">server/bl/agent</span></div>
+      <div class="step db"><h3>שמירה ותשובה</h3><p>השיחה וההשוואה נשמרות ב-Supabase. הלקוח מציג את ההודעה ואת כרטיס ההשוואה.</p><span class="where">server/dal → Supabase</span></div>
+    </div>
+  </section>
+
+  <section id="where">
+    <h2>מה רץ איפה</h2>
+    <p class="lead">בייצור: Docker, או Vercel (קבצים סטטיים ופונקציה אחת עבור <code dir="ltr">/api</code>).</p>
+    <div class="legend">
+      <div class="zone z-browser"><b>דפדפן</b>ממשק React בלבד.</div>
+      <div class="zone z-server"><b>שרת Node</b>API, לוגיקה עסקית, מנוע, סוכן, גישה לנתונים.</div>
+      <div class="zone z-google"><b>Google</b>מודלי Gemini.</div>
+      <div class="zone z-db"><b>Supabase</b>נתונים, משתמשים והתחברות.</div>
+    </div>
+  </section>
+</main>
+
+<footer>יועץ הרכב של שטראוס · האקתון 2026 · <a href="https://github.com/s0583232209/strauss-car-advisor">github.com/s0583232209/strauss-car-advisor</a></footer>
+</body>
+</html>

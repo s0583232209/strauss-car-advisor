@@ -521,13 +521,13 @@ export const AdminView: React.FC = () => {
               <h4 className="font-bold text-slate-900 text-sm">ביטוח לאומי ומס בריאות</h4>
               <div className="space-y-2 font-mono">
                 <div className="p-2 rounded bg-white border border-slate-100 flex justify-between">
-                  <span>שיעור מופחת (עד 7,522 ₪):</span>
+                  <span>שיעור מופחת (עד {currentRules.netMethod.nationalInsurance.threshold.toLocaleString()} ₪):</span>
                   <span className="font-bold text-brand-dark">
                     {((currentRules.netMethod.nationalInsurance.lowRate + currentRules.netMethod.health.lowRate) * 100).toFixed(2)}%
                   </span>
                 </div>
                 <div className="p-2 rounded bg-white border border-slate-100 flex justify-between">
-                  <span>שיעור מלא (עד 50,695 ₪):</span>
+                  <span>שיעור מלא (עד {currentRules.netMethod.nationalInsurance.ceiling.toLocaleString()} ₪):</span>
                   <span className="font-bold text-brand-dark">
                     {((currentRules.netMethod.nationalInsurance.highRate + currentRules.netMethod.health.highRate) * 100).toFixed(2)}%
                   </span>
@@ -571,7 +571,7 @@ export const AdminView: React.FC = () => {
                 <strong>סוג רכב:</strong> הקטלוג אינו כולל עמודת סוג רכב, לכן ברירת המחדל לרכב פרטי היא <code>1</code>.
               </li>
               <li>
-                <strong>אזהרת דגמים כפולים:</strong> קוד תוצר ודגם מסוימים מופיעים פעמיים עם סוג רכב שונה (למשל BYD 01014/00003/2025: סוג 1 מחזיר ATTO 3 עם שווי 3,130 ₪, ואילו סוג 2 מחזיר TANG עם שווי 6,950 ₪!). השמטת סוג הרכב תחזיר ערך שגוי.
+                <strong>אזהרת דגמים כפולים:</strong> קוד תוצר ודגם מסוימים מופיעים פעמיים עם סוג רכב שונה (למשל BYD 01014/00003/2025: סוג 1 מחזיר ATTO 3, ואילו סוג 2 מחזיר TANG עם שווי שימוש גבוה פי שניים ויותר!). השמטת סוג הרכב תחזיר ערך שגוי.
               </li>
               <li>
                 <strong>שדה סוג הנעה:</strong> בקובץ המקורי מקודד כ-<code>0</code> בנזין · <code>1</code> היברידי · <code>2</code> פלאג-אין · <code>3</code> חשמלי (על אף שכותרת העמודה מנוסחת בצורה מטעה).
@@ -767,8 +767,11 @@ export const AdminView: React.FC = () => {
 
           <div className="space-y-3 text-xs text-slate-700">
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-              <span className="font-bold text-slate-900 block mb-1">1. מדרגות מס הכנסה וביטוח לאומי (2025):</span>
-              החישוב מתבצע על בסיס חודשי שוטף (ולא מצטבר שנתי), לפי מדרגות מס 2025, ערך נקודת זיכוי של 242 ₪ לחודש, ותקרות ביטוח לאומי ומס בריאות מעודכנות (סף מופחת 7,522 ₪, תקרה 50,695 ₪).
+              <span className="font-bold text-slate-900 block mb-1">1. מדרגות מס הכנסה וביטוח לאומי ({currentRules.netMethod.taxYear}):</span>
+              החישוב מתבצע על בסיס חודשי שוטף (ולא מצטבר שנתי), לפי מדרגות מס {currentRules.netMethod.taxYear}, ערך נקודת זיכוי של{' '}
+              {currentRules.netMethod.creditPointValue.toLocaleString()} ₪ לחודש, ותקרות ביטוח לאומי ומס בריאות מעודכנות (סף מופחת{' '}
+              {currentRules.netMethod.nationalInsurance.threshold.toLocaleString()} ₪, תקרה{' '}
+              {currentRules.netMethod.nationalInsurance.ceiling.toLocaleString()} ₪).
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -782,13 +785,18 @@ export const AdminView: React.FC = () => {
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-              <span className="font-bold text-slate-900 block mb-1">4. החזר טעינה חשמלית (+250 ₪ נטו מגולם):</span>
-              רכבים בעלי קוד הנעה 3 (חשמלי מלא) בלבד זכאים להחזר. רכבים היברידיים ופלאג-אין אינם זכאים. סכום הגילום מחושב במדויק בשיטת Bisection כך שהתוספת לנטו תעמוד בדיוק על 250 ₪.
+              <span className="font-bold text-slate-900 block mb-1">
+                4. החזר טעינה חשמלית (+{currentRules.electric.netBonus.toLocaleString()} ₪ נטו מגולם):
+              </span>
+              רכבים בעלי קוד הנעה 3 (חשמלי מלא) בלבד זכאים להחזר. רכבים היברידיים ופלאג-אין אינם זכאים. סכום הגילום מחושב בשיטת
+              Bisection כך שהתוספת לנטו תעמוד על {currentRules.electric.netBonus.toLocaleString()} ₪.
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
               <span className="font-bold text-slate-900 block mb-1">5. מסלול ברוכת ילדים:</span>
-              זכאות מגיל 4 ילדים ומעלה עד גיל 23. על הפער שבין עלות הרכב למעסיק (למשל קיה קרניבל 6,000 ₪) לבין תקציב הקבוצה של העובד, העובד משתתף ב-50% המנוכים משכר הנטו, והמעסיק מממן את 50% הנותרים.
+              זכאות מגיל {currentRules.familyTrack.minChildren} ילדים ומעלה עד גיל {currentRules.familyTrack.childMaxAge}. על הפער שבין
+              עלות הרכב המשפחתי למעסיק ({currentRules.familyTrack.carPrice.toLocaleString()} ₪) לבין תקציב הקבוצה של העובד, העובד משתתף
+              ב-{(currentRules.familyTrack.gapSplitEmployee * 100).toLocaleString()}% המנוכים משכר הנטו, והמעסיק מממן את היתרה.
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">

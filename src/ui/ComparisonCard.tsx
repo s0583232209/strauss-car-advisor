@@ -21,8 +21,11 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { CarHighlights, ComparisonResult } from '../../shared/types.ts';
+import { CarHighlights, ComparisonResult, Rules } from '../../shared/types.ts';
 import { WaterfallChart } from './WaterfallChart.tsx';
+
+/** A rule rate (0.0104) as a percent label ("1.04%") */
+const pct = (rate: number) => `${(rate * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 
 /** Approved pros and cons of one car (admin-approved text, no numbers from the model) */
 const CarHighlightsColumn: React.FC<{ title: string; carLabel: string; highlights: CarHighlights }> = ({
@@ -54,6 +57,8 @@ const CarHighlightsColumn: React.FC<{ title: string; carLabel: string; highlight
 
 interface ComparisonCardProps {
   comparison: ComparisonResult;
+  /** The current rules (GET /api/meta): every amount and rate in the notes comes from here, none is written in the UI */
+  rules?: Rules;
   /** Pros and cons of today's car and of the alternative car, when the admin approved them */
   highlights?: { today?: CarHighlights; alt?: CarHighlights };
   onSelectCarAgain?: () => void;
@@ -64,6 +69,7 @@ interface ComparisonCardProps {
 
 export const ComparisonCard: React.FC<ComparisonCardProps> = ({
   comparison,
+  rules,
   highlights,
   onSelectCarAgain,
   onCompareAnother,
@@ -195,7 +201,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
               {comparison.altState.evGrossUp > 0 && (
                 <div className="flex justify-between text-success font-medium">
                   <span>החזר טעינה חשמלית (מגולם):</span>
-                  <span>+250 ₪ נטו</span>
+                  <span>{rules ? `+${rules.electric.netBonus.toLocaleString()} ₪ נטו` : 'כלול בנטו'}</span>
                 </div>
               )}
               {comparison.altState.maintenance > 0 && (
@@ -365,9 +371,24 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
             </div>
 
             <div className="text-xs text-slate-500 space-y-1">
-              <div>• שווי שימוש: רשות המסים 2026, קובץ מורחב לפי מפתח ייחודי (שנת רישום, סוג רכב 1, קוד תוצר, קוד דגם).</div>
-              <div>• מס הכנסה חושב לפי מדרגות מס הכנסה חודשיות שנת 2025 וערך נקודת זיכוי של 242 ₪ לחודש.</div>
-              <div>• ביטוח לאומי ומס בריאות: שיעור מופחת (4.27%) עד 7,522 ₪, שיעור מלא (12.17%) עד תקרת 50,695 ₪.</div>
+              {rules && (
+                <>
+                  <div>• שווי שימוש: {rules.valueOfUse.source}, לפי מפתח ייחודי ({rules.valueOfUse.key.join(', ')}).</div>
+                  <div>
+                    • מס הכנסה חושב לפי מדרגות מס הכנסה חודשיות שנת {rules.netMethod.taxYear} וערך נקודת זיכוי של{' '}
+                    {rules.netMethod.creditPointValue.toLocaleString()} ₪ לחודש.
+                  </div>
+                  <div>
+                    • ביטוח לאומי: {pct(rules.netMethod.nationalInsurance.lowRate)} עד{' '}
+                    {rules.netMethod.nationalInsurance.threshold.toLocaleString()} ₪, {pct(rules.netMethod.nationalInsurance.highRate)} עד
+                    תקרת {rules.netMethod.nationalInsurance.ceiling.toLocaleString()} ₪.
+                  </div>
+                  <div>
+                    • מס בריאות: {pct(rules.netMethod.health.lowRate)} עד {rules.netMethod.health.threshold.toLocaleString()} ₪,{' '}
+                    {pct(rules.netMethod.health.highRate)} עד תקרת {rules.netMethod.health.ceiling.toLocaleString()} ₪.
+                  </div>
+                </>
+              )}
               <div>• עודף תקציב רכב: לפי נוהל שטראוס, עודף אינו נפדה במזומן.</div>
             </div>
           </div>
@@ -429,7 +450,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
 
       {/* Footer Note */}
       <div className="px-6 py-2.5 bg-slate-50 border-t border-slate-100 text-[11px] text-slate-500 text-center">
-        חישוב אינדיקטיבי לפי לוחות 2025; ההפרשות והזיכויים כפי שהוזנו בפרופיל
+        חישוב אינדיקטיבי{rules ? ` לפי לוחות ${rules.netMethod.taxYear}` : ''}; ההפרשות והזיכויים כפי שהוזנו בפרופיל
       </div>
     </div>
   );
