@@ -2952,30 +2952,34 @@ function requireRole(auth, roles) {
 var asyncHandler = (fn) => (req, res, next) => {
   fn(req, res, next).catch(next);
 };
+function securityHeaderValues(isProduction) {
+  const headers = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Opener-Policy": "same-origin"
+  };
+  if (isProduction) {
+    headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+    headers["Content-Security-Policy"] = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: blob:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join("; ");
+  }
+  return headers;
+}
 function securityHeaders(isProduction) {
+  const headers = Object.entries(securityHeaderValues(isProduction));
   return (_req, res, next) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-    if (isProduction) {
-      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-      res.setHeader(
-        "Content-Security-Policy",
-        [
-          "default-src 'self'",
-          "script-src 'self'",
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-          "font-src 'self' https://fonts.gstatic.com data:",
-          "img-src 'self' data: blob:",
-          "connect-src 'self'",
-          "frame-ancestors 'none'",
-          "base-uri 'self'",
-          "form-action 'self'"
-        ].join("; ")
-      );
-    }
+    for (const [name, value] of headers) res.setHeader(name, value);
     next();
   };
 }
@@ -3252,9 +3256,6 @@ function adminRouter(admin) {
   }));
   router.post("/rules/reset", asyncHandler(async (_req, res) => {
     res.json(await admin.resetRules());
-  }));
-  router.post("/calibration", asyncHandler(async (_req, res) => {
-    res.json(await admin.runCalibration());
   }));
   router.post(
     "/tax-records",
@@ -3872,268 +3873,6 @@ async function lookupBenefitValue(regYear, productCode, modelCode, vehicleType =
   return null;
 }
 
-// server/bl/services/calibration.ts
-async function runCalibrationSuite() {
-  const results = [];
-  const employees2 = employees_default;
-  const catalog = catalog_default;
-  function assertTolerance(testName, category, actualVal, expectedVal, tolerance = 1, details = "") {
-    const diff = Math.abs(actualVal - expectedVal);
-    const passed2 = diff <= tolerance;
-    results.push({
-      name: testName,
-      category,
-      passed: passed2,
-      expected: expectedVal.toLocaleString(),
-      actual: actualVal.toLocaleString(),
-      details: passed2 ? details : `${details} (\u05E4\u05E2\u05E8: ${diff.toFixed(2)})`
-    });
-  }
-  function assertCondition(testName, category, condition, expectedDesc, actualDesc, details = "") {
-    results.push({
-      name: testName,
-      category,
-      passed: condition,
-      expected: expectedDesc,
-      actual: actualDesc,
-      details
-    });
-  }
-  const noa = employees2.find((e) => e.id === "E-001");
-  const noaReq = { type: "go_electric", targetCarId: "CAR-10" };
-  const noaRes = buildScenario(noa, noaReq);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05E0\u05D8\u05D5 \u05D4\u05D9\u05D5\u05DD", "benchmark", Math.round(noaRes.todayBreakdown.net), 11032);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05E0\u05D8\u05D5 \u05D7\u05DC\u05D5\u05E4\u05D4 (ATTO 3)", "benchmark", Math.round(noaRes.altBreakdown.net), 11693);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05D4\u05E4\u05E8\u05E9 \u05E0\u05D8\u05D5 (+661)", "benchmark", noaRes.diffNet, 661);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05DE\u05E1 \u05D4\u05D9\u05D5\u05DD (3,443)", "benchmark", Math.round(noaRes.todayBreakdown.tax), 3443);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05DE\u05E1 \u05D7\u05DC\u05D5\u05E4\u05D4 (3,283)", "benchmark", Math.round(noaRes.altBreakdown.tax), 3283);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD (2,153)", "benchmark", Math.round(noaRes.todayBreakdown.niHealth), 2153);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D7\u05DC\u05D5\u05E4\u05D4 (2,092)", "benchmark", Math.round(noaRes.altBreakdown.niHealth), 2092);
-  assertTolerance("\u05E0\u05D5\u05E2\u05D4: \u05D2\u05D9\u05DC\u05D5\u05DD \u05D4\u05D7\u05D6\u05E8 \u05D7\u05E9\u05DE\u05DC (440)", "benchmark", Math.round(noaRes.altState.evGrossUp), 440);
-  const david = employees2.find((e) => e.id === "E-002");
-  const davidReq = { type: "family_track", targetCarId: "CAR-19" };
-  const davidRes = buildScenario(david, davidReq);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05E0\u05D8\u05D5 \u05D4\u05D9\u05D5\u05DD", "benchmark", Math.round(davidRes.todayBreakdown.net), 8600);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05E0\u05D8\u05D5 \u05D7\u05DC\u05D5\u05E4\u05D4 (\u05E7\u05E8\u05E0\u05D9\u05D1\u05DC)", "benchmark", Math.round(davidRes.altBreakdown.net), 5078);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05D4\u05E4\u05E8\u05E9 \u05E0\u05D8\u05D5 (-3,522)", "benchmark", davidRes.diffNet, -3522);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05DE\u05E1 \u05D4\u05D9\u05D5\u05DD (1,369)", "benchmark", Math.round(davidRes.todayBreakdown.tax), 1369);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05DE\u05E1 \u05D7\u05DC\u05D5\u05E4\u05D4 (2,861)", "benchmark", Math.round(davidRes.altBreakdown.tax), 2861);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD (1,250)", "benchmark", Math.round(davidRes.todayBreakdown.niHealth), 1250);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D7\u05DC\u05D5\u05E4\u05D4 (1,879)", "benchmark", Math.round(davidRes.altBreakdown.niHealth), 1879);
-  assertTolerance("\u05D3\u05D5\u05D3: \u05D7\u05DC\u05E7 \u05E2\u05D5\u05D1\u05D3 \u05D1\u05E4\u05E2\u05E8 (1,150)", "benchmark", Math.round(davidRes.employeeGap), 1150);
-  const rachel = employees2.find((e) => e.id === "E-003");
-  const rachelReq = { type: "go_electric", targetCarId: "CAR-06" };
-  const rachelRes = buildScenario(rachel, rachelReq);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05E0\u05D8\u05D5 \u05D4\u05D9\u05D5\u05DD (\u05D5\u05D9\u05EA\u05D5\u05E8 1,500)", "benchmark", Math.round(rachelRes.todayBreakdown.net), 15047);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05E0\u05D8\u05D5 \u05D7\u05DC\u05D5\u05E4\u05D4 (MG4)", "benchmark", Math.round(rachelRes.altBreakdown.net), 13109);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05D4\u05E4\u05E8\u05E9 \u05E0\u05D8\u05D5 (-1,938)", "benchmark", rachelRes.diffNet, -1938);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05DE\u05E1 \u05D4\u05D9\u05D5\u05DD (3,419)", "benchmark", Math.round(rachelRes.todayBreakdown.tax), 3419);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05DE\u05E1 \u05D7\u05DC\u05D5\u05E4\u05D4 (3,910)", "benchmark", Math.round(rachelRes.altBreakdown.tax), 3910);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD (2,144)", "benchmark", Math.round(rachelRes.todayBreakdown.niHealth), 2144);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D7\u05DC\u05D5\u05E4\u05D4 (2,315)", "benchmark", Math.round(rachelRes.altBreakdown.niHealth), 2315);
-  assertTolerance("\u05E8\u05D7\u05DC: \u05D2\u05D9\u05DC\u05D5\u05DD \u05D4\u05D7\u05D6\u05E8 \u05D7\u05E9\u05DE\u05DC (473)", "benchmark", Math.round(rachelRes.altState.evGrossUp), 473);
-  const yossi = employees2.find((e) => e.id === "E-004");
-  const yossiReq = { type: "go_electric", targetCarId: "CAR-11" };
-  const yossiRes = buildScenario(yossi, yossiReq);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05E0\u05D8\u05D5 \u05D4\u05D9\u05D5\u05DD", "benchmark", Math.round(yossiRes.todayBreakdown.net), 10693);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05E0\u05D8\u05D5 \u05D7\u05DC\u05D5\u05E4\u05D4 (EV3)", "benchmark", Math.round(yossiRes.altBreakdown.net), 11900);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05D4\u05E4\u05E8\u05E9 \u05E0\u05D8\u05D5 (+1,207)", "benchmark", yossiRes.diffNet, 1207);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05DE\u05E1 \u05D4\u05D9\u05D5\u05DD (3,991)", "benchmark", Math.round(yossiRes.todayBreakdown.tax), 3991);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05DE\u05E1 \u05D7\u05DC\u05D5\u05E4\u05D4 (3,497)", "benchmark", Math.round(yossiRes.altBreakdown.tax), 3497);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD (2,301)", "benchmark", Math.round(yossiRes.todayBreakdown.niHealth), 2301);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D7\u05DC\u05D5\u05E4\u05D4 (2,128)", "benchmark", Math.round(yossiRes.altBreakdown.niHealth), 2128);
-  assertTolerance("\u05D9\u05D5\u05E1\u05D9: \u05D2\u05D9\u05DC\u05D5\u05DD \u05D4\u05D7\u05D6\u05E8 \u05D7\u05E9\u05DE\u05DC (440)", "benchmark", Math.round(yossiRes.altState.evGrossUp), 440);
-  const michal = employees2.find((e) => e.id === "E-005");
-  const michalReq = { type: "waive_car" };
-  const michalRes = buildScenario(michal, michalReq);
-  assertTolerance("\u05DE\u05D9\u05DB\u05DC: \u05E0\u05D8\u05D5 \u05D4\u05D9\u05D5\u05DD", "benchmark", Math.round(michalRes.todayBreakdown.net), 14244);
-  assertTolerance("\u05DE\u05D9\u05DB\u05DC: \u05E0\u05D8\u05D5 \u05D7\u05DC\u05D5\u05E4\u05D4 (\u05D5\u05D9\u05EA\u05D5\u05E8 2,000)", "benchmark", Math.round(michalRes.altBreakdown.net), 17806);
-  assertTolerance("\u05DE\u05D9\u05DB\u05DC: \u05D4\u05E4\u05E8\u05E9 \u05E0\u05D8\u05D5 (+3,562)", "benchmark", michalRes.diffNet, 3562);
-  assertTolerance("\u05DE\u05D9\u05DB\u05DC: \u05DE\u05E1 \u05D4\u05D9\u05D5\u05DD (6,593)", "benchmark", Math.round(michalRes.todayBreakdown.tax), 6593);
-  assertTolerance("\u05DE\u05D9\u05DB\u05DC: \u05DE\u05E1 \u05D7\u05DC\u05D5\u05E4\u05D4 (5,694)", "benchmark", Math.round(michalRes.altBreakdown.tax), 5694);
-  assertTolerance("\u05DE\u05D9\u05DB\u05DC: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD (3,248)", "benchmark", Math.round(michalRes.todayBreakdown.niHealth), 3248);
-  assertTolerance("\u05DE\u05D9\u05DB\u05DC: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D7\u05DC\u05D5\u05E4\u05D4 (2,935)", "benchmark", Math.round(michalRes.altBreakdown.niHealth), 2935);
-  const eli = employees2.find((e) => e.id === "E-006");
-  const eliReq = { type: "go_electric", targetCarId: "CAR-14" };
-  const eliRes = buildScenario(eli, eliReq);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05E0\u05D8\u05D5 \u05D4\u05D9\u05D5\u05DD", "benchmark", Math.round(eliRes.todayBreakdown.net), 17073);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05E0\u05D8\u05D5 \u05D7\u05DC\u05D5\u05E4\u05D4 (MODEL 3)", "benchmark", Math.round(eliRes.altBreakdown.net), 17794);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05D4\u05E4\u05E8\u05E9 \u05E0\u05D8\u05D5 (+721)", "benchmark", eliRes.diffNet, 721);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05DE\u05E1 \u05D4\u05D9\u05D5\u05DD (9,367)", "benchmark", Math.round(eliRes.todayBreakdown.tax), 9367);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05DE\u05E1 \u05D7\u05DC\u05D5\u05E4\u05D4 (9,183)", "benchmark", Math.round(eliRes.altBreakdown.tax), 9183);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D4\u05D9\u05D5\u05DD (4,170)", "benchmark", Math.round(eliRes.todayBreakdown.niHealth), 4170);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05D1\u05D9\u05D8\u05D5\u05D7 \u05DC\u05D0\u05D5\u05DE\u05D9+\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA \u05D7\u05DC\u05D5\u05E4\u05D4 (4,106)", "benchmark", Math.round(eliRes.altBreakdown.niHealth), 4106);
-  assertTolerance("\u05D0\u05DC\u05D9: \u05D2\u05D9\u05DC\u05D5\u05DD \u05D4\u05D7\u05D6\u05E8 \u05D7\u05E9\u05DE\u05DC (473)", "benchmark", Math.round(eliRes.altState.evGrossUp), 473);
-  const allScenarios = [noaRes, davidRes, rachelRes, yossiRes, michalRes, eliRes];
-  for (const sc of allScenarios) {
-    const isSumExact = Math.abs(sc.sumSteps - sc.exactDiff) < 1e-3;
-    assertCondition(
-      `\u05E1\u05DB\u05D5\u05DD \u05E6\u05E2\u05D3\u05D9 \u05D4\u05D3\u05DC\u05EA\u05D0 \u05E9\u05D5\u05D5\u05D4 \u05D1\u05D3\u05D9\u05D5\u05E7 \u05DC\u05D4\u05E4\u05E8\u05E9 (${sc.todayCarLabel})`,
-      "rules",
-      isSumExact,
-      `\u05E1\u05DB\u05D5\u05DD \u05E6\u05E2\u05D3\u05D9\u05DD = \u05D4\u05E4\u05E8\u05E9 \u05DE\u05D3\u05D5\u05D9\u05E7 (${sc.exactDiff.toFixed(2)})`,
-      `\u05E1\u05DB\u05D5\u05DD = ${sc.sumSteps.toFixed(2)}`
-    );
-  }
-  const hybridTestCar = catalog.find((c) => c.driveCode === 1);
-  const plugInTestCar = catalog.find((c) => c.driveCode === 2);
-  const hybridRes = buildScenario(noa, { type: "change_car", targetCar: hybridTestCar });
-  const plugInRes = buildScenario(eli, { type: "change_car", targetCar: plugInTestCar });
-  assertCondition(
-    "\u05E8\u05DB\u05D1 \u05D4\u05D9\u05D1\u05E8\u05D9\u05D3\u05D9 \u05D0\u05D9\u05E0\u05D5 \u05DE\u05E7\u05D1\u05DC \u05D4\u05D7\u05D6\u05E8 \u05D7\u05E9\u05DE\u05DC",
-    "rules",
-    hybridRes.altState.evGrossUp === 0,
-    "evGrossUp = 0",
-    `evGrossUp = ${hybridRes.altState.evGrossUp}`
-  );
-  assertCondition(
-    "\u05E8\u05DB\u05D1 \u05E4\u05DC\u05D0\u05D2-\u05D0\u05D9\u05DF \u05D0\u05D9\u05E0\u05D5 \u05DE\u05E7\u05D1\u05DC \u05D4\u05D7\u05D6\u05E8 \u05D7\u05E9\u05DE\u05DC",
-    "rules",
-    plugInRes.altState.evGrossUp === 0,
-    "evGrossUp = 0",
-    `evGrossUp = ${plugInRes.altState.evGrossUp}`
-  );
-  const salesRepOcc = findOccupation("\u05E0\u05E6\u05D9\u05D2/\u05EA \u05DE\u05DB\u05D9\u05E8\u05D5\u05EA \u05E9\u05D8\u05D7");
-  assertCondition(
-    "\u05E0\u05E6\u05D9\u05D2 \u05E9\u05D8\u05D7: \u05E8\u05DB\u05D1 \u05D7\u05D5\u05D1\u05D4, \u05D0\u05D9\u05E0\u05D5 \u05E8\u05E9\u05D0\u05D9 \u05DC\u05D5\u05D5\u05EA\u05E8",
-    "rules",
-    salesRepOcc?.carMandatory === true && salesRepOcc?.canWaive === false,
-    "carMandatory=true, canWaive=false",
-    `carMandatory=${salesRepOcc?.carMandatory}, canWaive=${salesRepOcc?.canWaive}`
-  );
-  const davidWaiveRes = buildScenario(david, { type: "waive_car" });
-  assertCondition(
-    '\u05E0\u05D9\u05E1\u05D9\u05D5\u05DF \u05D5\u05D9\u05EA\u05D5\u05E8 \u05E2\u05DC \u05E8\u05DB\u05D1 \u05E2"\u05D9 \u05D3\u05D5\u05D3 (\u05E0\u05E6\u05D9\u05D2 \u05DE\u05DB\u05D9\u05E8\u05D5\u05EA) \u05E0\u05D7\u05E1\u05DD',
-    "rules",
-    !davidWaiveRes.eligible,
-    "eligible = false",
-    `eligible = ${davidWaiveRes.eligible}`
-  );
-  const noaFamilyRes = buildScenario(noa, { type: "family_track" });
-  assertCondition(
-    "\u05E0\u05D5\u05E2\u05D4 (2 \u05D9\u05DC\u05D3\u05D9\u05DD) \u05E0\u05D7\u05E1\u05DE\u05EA \u05D1\u05DE\u05E1\u05DC\u05D5\u05DC \u05D1\u05E8\u05D5\u05DB\u05EA \u05D9\u05DC\u05D3\u05D9\u05DD",
-    "rules",
-    !noaFamilyRes.eligible,
-    "eligible = false",
-    `eligible = ${noaFamilyRes.eligible}`
-  );
-  assertCondition(
-    "\u05D3\u05D5\u05D3 (5 \u05D9\u05DC\u05D3\u05D9\u05DD) \u05D6\u05DB\u05D0\u05D9 \u05DC\u05DE\u05E1\u05DC\u05D5\u05DC \u05D1\u05E8\u05D5\u05DB\u05EA \u05D9\u05DC\u05D3\u05D9\u05DD",
-    "rules",
-    davidRes.eligible,
-    "eligible = true",
-    `eligible = ${davidRes.eligible}`
-  );
-  const groupAEmp = {
-    ...noa,
-    group: "\u05D0",
-    occupation: "\u05D8\u05DB\u05E0\u05D0\u05D9/\u05EA \u05E9\u05D9\u05E8\u05D5\u05EA"
-  };
-  const highCar = catalog.find((c) => c.group === "\u05D2");
-  const illegalChoiceRes = buildScenario(groupAEmp, { type: "change_car", targetCar: highCar });
-  assertCondition(
-    "\u05E2\u05D5\u05D1\u05D3 \u05DE\u05E7\u05D1\u05D5\u05E6\u05D4 \u05D0 \u05D0\u05D9\u05E0\u05D5 \u05D9\u05DB\u05D5\u05DC \u05DC\u05D1\u05D7\u05D5\u05E8 \u05E8\u05DB\u05D1 \u05DE\u05E7\u05D1\u05D5\u05E6\u05D4 \u05D2",
-    "rules",
-    !illegalChoiceRes.eligible,
-    "eligible = false",
-    `eligible = ${illegalChoiceRes.eligible}`
-  );
-  const carnivalCar = catalog.find((c) => c.id === "CAR-19");
-  const regularCarnivalChoice = buildScenario(noa, { type: "change_car", targetCar: carnivalCar });
-  assertCondition(
-    "\u05E8\u05DB\u05D1 \u05DE\u05E9\u05E4\u05D7\u05EA\u05D9 (\u05E7\u05E8\u05E0\u05D9\u05D1\u05DC) \u05D0\u05D9\u05E0\u05D5 \u05E0\u05D9\u05EA\u05DF \u05DC\u05D1\u05D7\u05D9\u05E8\u05D4 \u05D1\u05DE\u05E1\u05DC\u05D5\u05DC \u05E8\u05D2\u05D9\u05DC",
-    "rules",
-    !regularCarnivalChoice.eligible,
-    "eligible = false",
-    `eligible = ${regularCarnivalChoice.eligible}`
-  );
-  const groupAFamily = { ...groupAEmp, childrenUpTo23: 4 };
-  const groupAFamilyRes = buildScenario(groupAFamily, { type: "family_track", targetCarId: "CAR-19" });
-  assertTolerance(
-    "\u05D3\u05D5\u05D2\u05DE\u05EA \u05E4\u05E2\u05E8 \u05DE\u05E9\u05E4\u05D7\u05EA\u05D9 (\u05EA\u05E7\u05E6\u05D9\u05D1 3,500, \u05E2\u05DC\u05D5\u05EA 6,000): \u05D7\u05DC\u05E7 \u05E2\u05D5\u05D1\u05D3 1,250",
-    "rules",
-    groupAFamilyRes.employeeGap,
-    1250,
-    0
-  );
-  const atto3Lookup = await lookupBenefitValue("2025", "01014", "00003", "1");
-  const tangLookup = await lookupBenefitValue("2025", "01014", "00003", "2");
-  assertCondition(
-    "\u05D7\u05D9\u05E4\u05D5\u05E9 \u05E2\u05DD \u05E1\u05D5\u05D2 \u05E8\u05DB\u05D1 1 \u05DE\u05D7\u05D6\u05D9\u05E8 ATTO 3 \u05E2\u05DD \u05E9\u05D5\u05D5\u05D9 3,130",
-    "lookup",
-    atto3Lookup?.value === 3130 && atto3Lookup?.commercialName === "ATTO 3",
-    "value = 3,130 (ATTO 3)",
-    `value = ${atto3Lookup?.value} (${atto3Lookup?.commercialName})`
-  );
-  assertCondition(
-    "\u05D7\u05D9\u05E4\u05D5\u05E9 \u05E2\u05DD \u05E1\u05D5\u05D2 \u05E8\u05DB\u05D1 2 \u05DE\u05D7\u05D6\u05D9\u05E8 TANG \u05E2\u05DD \u05E9\u05D5\u05D5\u05D9 6,950",
-    "lookup",
-    tangLookup?.value === 6950 && tangLookup?.commercialName === "TANG",
-    "value = 6,950 (TANG)",
-    `value = ${tangLookup?.value} (${tangLookup?.commercialName})`
-  );
-  let allCatalogMatch = true;
-  for (const car of catalog) {
-    const seedVal = await lookupBenefitValue(car.year, car.productCode, car.modelCode, "1");
-    if (!seedVal || seedVal.value !== car.benefit) {
-      allCatalogMatch = false;
-      break;
-    }
-  }
-  assertCondition(
-    "\u05DB\u05DC 20 \u05E8\u05DB\u05D1\u05D9 \u05D4\u05E7\u05D8\u05DC\u05D5\u05D2 \u05EA\u05D5\u05D0\u05DE\u05D9\u05DD \u05D1-100% \u05DC\u05E9\u05D5\u05D5\u05D9 \u05D4\u05E9\u05D9\u05DE\u05D5\u05E9 \u05D1\u05D1\u05E1\u05D9\u05E1 \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD",
-    "lookup",
-    allCatalogMatch,
-    "\u05EA\u05D5\u05D0\u05DD \u05DE\u05DC\u05D0 (20/20)",
-    allCatalogMatch ? "\u05EA\u05D5\u05D0\u05DD \u05DE\u05DC\u05D0" : "\u05D0\u05D9 \u05D4\u05EA\u05D0\u05DE\u05D4"
-  );
-  const shira = employees2.find((e) => e.id === "E-GEN-B");
-  const shiraRes = buildScenario(shira, { type: "waive_car" });
-  assertCondition(
-    "\u05D5\u05D9\u05EA\u05D5\u05E8 \u05DE\u05D4\u05E0\u05D3\u05E1\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA \u05E7\u05D1\u05D5\u05E6\u05D4 \u05D1: \u05D6\u05DB\u05D0\u05D9\u05EA \u05DC\u05D5\u05D9\u05EA\u05D5\u05E8",
-    "group_b",
-    shiraRes.eligible,
-    "eligible = true",
-    `eligible = ${shiraRes.eligible}`
-  );
-  assertTolerance(
-    "\u05D5\u05D9\u05EA\u05D5\u05E8 \u05DE\u05D4\u05E0\u05D3\u05E1\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA \u05E7\u05D1\u05D5\u05E6\u05D4 \u05D1: \u05D3\u05DE\u05D9 \u05D0\u05D7\u05D6\u05E7\u05D4 1,500",
-    "group_b",
-    shiraRes.altState.maintenance,
-    1500,
-    0
-  );
-  assertTolerance(
-    "\u05D5\u05D9\u05EA\u05D5\u05E8 \u05DE\u05D4\u05E0\u05D3\u05E1\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA \u05E7\u05D1\u05D5\u05E6\u05D4 \u05D1: \u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 \u05DE\u05EA\u05D0\u05E4\u05E1",
-    "group_b",
-    shiraRes.altState.benefitValue,
-    0,
-    0
-  );
-  assertTolerance(
-    "\u05D5\u05D9\u05EA\u05D5\u05E8 \u05DE\u05D4\u05E0\u05D3\u05E1\u05EA \u05EA\u05D4\u05DC\u05D9\u05DA \u05E7\u05D1\u05D5\u05E6\u05D4 \u05D1: \u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA \u05E2\u05E6\u05DE\u05D9\u05EA \u05DE\u05EA\u05D0\u05E4\u05E1\u05EA",
-    "group_b",
-    shiraRes.altState.participation,
-    0,
-    0
-  );
-  assertCondition(
-    "\u05D5\u05D9\u05EA\u05D5\u05E8 \u05E7\u05D1\u05D5\u05E6\u05D4 \u05D1: \u05E1\u05DB\u05D5\u05DD \u05E6\u05E2\u05D3\u05D9 \u05D4\u05D3\u05DC\u05EA\u05D0 \u05E9\u05D5\u05D5\u05D4 \u05D1\u05D3\u05D9\u05D5\u05E7 \u05DC\u05D4\u05E4\u05E8\u05E9 \u05D4\u05E0\u05D8\u05D5",
-    "group_b",
-    Math.abs(shiraRes.sumSteps - shiraRes.exactDiff) < 1e-3,
-    "\u05E1\u05DB\u05D5\u05DD \u05E6\u05E2\u05D3\u05D9\u05DD = \u05D4\u05E4\u05E8\u05E9 \u05DE\u05D3\u05D5\u05D9\u05E7",
-    `\u05E6\u05E2\u05D3\u05D9\u05DD = ${shiraRes.sumSteps.toFixed(2)}, \u05D4\u05E4\u05E8\u05E9 = ${shiraRes.exactDiff.toFixed(2)}`
-  );
-  const passed = results.filter((r) => r.passed).length;
-  const failed = results.filter((r) => !r.passed).length;
-  return {
-    passed,
-    failed,
-    total: results.length,
-    results
-  };
-}
-
 // server/bl/services/taxCsv.ts
 function decodeTaxCsv(buffer) {
   try {
@@ -4236,7 +3975,6 @@ function createAdminService(repo) {
       await repo.saveRules(null);
       return getRules();
     },
-    runCalibration: runCalibrationSuite,
     async importTaxCsv(buffer) {
       const records = parseTaxAuthorityCsv(buffer);
       await repo.saveTaxRecords(records);
@@ -4348,64 +4086,9 @@ function createTicketService(repo, now = Date.now) {
   };
 }
 
-// server/config.ts
-import path from "node:path";
-var ConfigError = class extends Error {
-};
-var list = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-function parseTrustProxy(v) {
-  if (v === void 0 || v === "") return false;
-  if (v === "true") return true;
-  if (v === "false") return false;
-  return /^\d+$/.test(v) ? Number(v) : v;
-}
-function loadConfig(env = process.env) {
-  const isProduction = env.NODE_ENV === "production";
-  const warnings = [];
-  const errors = [];
-  const config = {
-    isProduction,
-    port: Number(env.PORT) || 3e3,
-    host: env.HOST || (isProduction ? "0.0.0.0" : "127.0.0.1"),
-    trustProxy: parseTrustProxy(env.TRUST_PROXY),
-    allowedOrigins: list(env.ALLOWED_ORIGINS),
-    gemini: {
-      apiKey: env.GEMINI_API_KEY || "",
-      models: list(env.GEMINI_MODEL).length ? list(env.GEMINI_MODEL) : ["gemini-3.5-flash-lite"],
-      modelTimeoutMs: Number(env.GEMINI_MODEL_TIMEOUT_MS) || 1e4
-    },
-    fallback: env.FALLBACK_BASE_URL && env.FALLBACK_API_KEY ? {
-      baseUrl: env.FALLBACK_BASE_URL.replace(/\/+$/, ""),
-      apiKey: env.FALLBACK_API_KEY,
-      model: env.FALLBACK_MODEL || "meta-llama/llama-3.3-70b-instruct"
-    } : null,
-    supabaseUrl: env.SUPABASE_URL || void 0,
-    supabaseServiceKey: env.SUPABASE_SERVICE_ROLE_KEY || void 0,
-    dataDir: path.resolve(env.DATA_DIR || ".data"),
-    staticDir: path.resolve(env.STATIC_DIR || "dist")
-  };
-  if (!config.gemini.apiKey) (isProduction ? errors : warnings).push("GEMINI_API_KEY is not set: the agent cannot answer");
-  if (Boolean(config.supabaseUrl) !== Boolean(config.supabaseServiceKey)) {
-    errors.push("Set both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or neither");
-  }
-  if (!config.supabaseUrl) {
-    if (isProduction) errors.push("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production (login protects employee salary data)");
-    else warnings.push(`No Supabase: no login, every screen is open, and data is kept in local files under ${config.dataDir} (development only)`);
-  }
-  for (const legacy of ["REP_ACCESS_TOKEN", "ADMIN_ACCESS_TOKEN"]) {
-    if (env[legacy]) warnings.push(`${legacy} is no longer used: users log in with Supabase Auth; delete it`);
-  }
-  for (const legacy of ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY", "VITE_FALLBACK_KEY", "VITE_FALLBACK_BASE_URL", "VITE_FALLBACK_MODEL"]) {
-    if (env[legacy]) warnings.push(`${legacy} is no longer used: move it to the server variable (see .env.example) and delete it`);
-  }
-  if (errors.length) throw new ConfigError(`Invalid server configuration:
-- ${errors.join("\n- ")}`);
-  return { config, warnings };
-}
-
 // server/dal/fileRepository.ts
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path2 from "node:path";
+import path from "node:path";
 
 // server/dal/types.ts
 var toLookupResult = (r) => ({
@@ -4428,10 +4111,10 @@ var FileRepository = class {
     this.writeQueue = Promise.resolve();
   }
   get appFile() {
-    return path2.join(this.dir, "app-data.json");
+    return path.join(this.dir, "app-data.json");
   }
   get taxFile() {
-    return path2.join(this.dir, "tax-records.json");
+    return path.join(this.dir, "tax-records.json");
   }
   async readJson(file, fallback) {
     try {
@@ -4792,21 +4475,8 @@ function createRepository(env) {
   return new FileRepository(env.dataDir);
 }
 
-// server/index.ts
-dotenv.config({ quiet: true });
-async function main() {
-  let loaded;
-  try {
-    loaded = loadConfig();
-  } catch (err) {
-    if (err instanceof ConfigError) {
-      console.error(err.message);
-      process.exit(1);
-    }
-    throw err;
-  }
-  const { config, warnings } = loaded;
-  for (const w of warnings) console.warn(`[config] ${w}`);
+// server/bootstrap.ts
+async function buildApiApp(config) {
   const repo = createRepository({
     supabaseUrl: config.supabaseUrl,
     supabaseServiceKey: config.supabaseServiceKey,
@@ -4829,6 +4499,80 @@ async function main() {
     extractPayslip: gemini.extractPayslip,
     healthDetails: () => ({ ...gemini.status(), storage: repo.kind })
   });
+  return { app, storage: repo.kind };
+}
+
+// server/config.ts
+import path2 from "node:path";
+var ConfigError = class extends Error {
+};
+var list = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+function parseTrustProxy(v) {
+  if (v === void 0 || v === "") return false;
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return /^\d+$/.test(v) ? Number(v) : v;
+}
+function loadConfig(env = process.env) {
+  const isProduction = env.NODE_ENV === "production";
+  const warnings = [];
+  const errors = [];
+  const config = {
+    isProduction,
+    port: Number(env.PORT) || 3e3,
+    host: env.HOST || (isProduction ? "0.0.0.0" : "127.0.0.1"),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
+    allowedOrigins: list(env.ALLOWED_ORIGINS),
+    gemini: {
+      apiKey: env.GEMINI_API_KEY || "",
+      models: list(env.GEMINI_MODEL).length ? list(env.GEMINI_MODEL) : ["gemini-3.5-flash-lite"],
+      modelTimeoutMs: Number(env.GEMINI_MODEL_TIMEOUT_MS) || 1e4
+    },
+    fallback: env.FALLBACK_BASE_URL && env.FALLBACK_API_KEY ? {
+      baseUrl: env.FALLBACK_BASE_URL.replace(/\/+$/, ""),
+      apiKey: env.FALLBACK_API_KEY,
+      model: env.FALLBACK_MODEL || "meta-llama/llama-3.3-70b-instruct"
+    } : null,
+    supabaseUrl: env.SUPABASE_URL || void 0,
+    supabaseServiceKey: env.SUPABASE_SERVICE_ROLE_KEY || void 0,
+    dataDir: path2.resolve(env.DATA_DIR || ".data"),
+    staticDir: path2.resolve(env.STATIC_DIR || "dist")
+  };
+  if (!config.gemini.apiKey) (isProduction ? errors : warnings).push("GEMINI_API_KEY is not set: the agent cannot answer");
+  if (Boolean(config.supabaseUrl) !== Boolean(config.supabaseServiceKey)) {
+    errors.push("Set both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or neither");
+  }
+  if (!config.supabaseUrl) {
+    if (isProduction) errors.push("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production (login protects employee salary data)");
+    else warnings.push(`No Supabase: no login, every screen is open, and data is kept in local files under ${config.dataDir} (development only)`);
+  }
+  for (const legacy of ["REP_ACCESS_TOKEN", "ADMIN_ACCESS_TOKEN"]) {
+    if (env[legacy]) warnings.push(`${legacy} is no longer used: users log in with Supabase Auth; delete it`);
+  }
+  for (const legacy of ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY", "VITE_FALLBACK_KEY", "VITE_FALLBACK_BASE_URL", "VITE_FALLBACK_MODEL"]) {
+    if (env[legacy]) warnings.push(`${legacy} is no longer used: move it to the server variable (see .env.example) and delete it`);
+  }
+  if (errors.length) throw new ConfigError(`Invalid server configuration:
+- ${errors.join("\n- ")}`);
+  return { config, warnings };
+}
+
+// server/index.ts
+dotenv.config({ quiet: true });
+async function main() {
+  let loaded;
+  try {
+    loaded = loadConfig();
+  } catch (err) {
+    if (err instanceof ConfigError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
+  }
+  const { config, warnings } = loaded;
+  for (const w of warnings) console.warn(`[config] ${w}`);
+  const { app, storage } = await buildApiApp(config);
   if (!config.isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
@@ -4841,7 +4585,7 @@ async function main() {
     });
   }
   const server = app.listen(config.port, config.host, () => {
-    console.log(`Server listening on http://${config.host}:${config.port} (storage: ${repo.kind})`);
+    console.log(`Server listening on http://${config.host}:${config.port} (storage: ${storage})`);
   });
   const shutdown = () => {
     server.close(() => process.exit(0));
