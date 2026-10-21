@@ -12,6 +12,7 @@ import express, { Router } from 'express';
 import type { ServerConfig } from '../config.ts';
 import type { AdminService } from '../bl/services/adminService.ts';
 import type { AuthService } from '../bl/services/authService.ts';
+import type { CarFitService } from '../bl/services/carFitService.ts';
 import type { HighlightsService } from '../bl/services/highlightsService.ts';
 import { referenceMeta, type SessionService } from '../bl/services/sessionService.ts';
 import type { TicketService } from '../bl/services/ticketService.ts';
@@ -33,6 +34,8 @@ export interface AppDeps {
   auth?: AuthService | null;
   /** Car pros and cons; absent = the feature is off (older tests) */
   highlights?: HighlightsService;
+  /** "Beyond the money" car-fit chat; absent = the feature is off (older tests) */
+  carFit?: CarFitService;
   extractPayslip: (fileData: string, mimeType: string) => Promise<unknown>;
   /** Extra details for /api/health outside production (model cooldowns, storage) */
   healthDetails?: () => Record<string, unknown>;
@@ -66,7 +69,7 @@ export function createApp(deps: AppDeps): express.Express {
 
   api.use(express.json({ limit: '100kb' }));
   api.use('/auth', authRouter(auth, config.isProduction));
-  api.use('/sessions', anyUser, sessionsRouter(deps.sessions));
+  api.use('/sessions', anyUser, sessionsRouter(deps.sessions, deps.carFit));
   api.use('/tickets', ticketsRouter(deps.tickets, requireRole(auth, ['rep', 'admin'])));
 
   api.get('/health', (_req, res) => {

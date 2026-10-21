@@ -201,11 +201,11 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
   const chatCols = [
     'lg:col-span-8',
     isProfileOpen ? '' : 'lg:col-start-3',
-    lastComparison ? 'xl:col-span-6 xl:col-start-auto' : 'xl:col-span-12 xl:col-start-7',
+    lastComparison ? 'xl:col-span-8 xl:col-start-auto' : 'xl:col-span-12 xl:col-start-7',
   ].join(' ');
-  const calcCols = isProfileOpen ? 'xl:col-span-11' : 'xl:col-span-16';
+  const calcCols = isProfileOpen ? 'xl:col-span-10' : 'xl:col-span-14';
   const profileCols = isProfileOpen
-    ? `lg:col-span-4 ${lastComparison ? 'xl:col-span-7' : 'xl:col-span-6 xl:col-start-19'}`
+    ? `lg:col-span-4 ${lastComparison ? 'xl:col-span-6' : 'xl:col-span-6 xl:col-start-19'}`
     : `lg:col-span-2 lg:col-start-11 ${lastComparison ? 'xl:col-span-2 xl:col-start-auto' : 'xl:col-span-2 xl:col-start-23'}`;
 
   return (
@@ -213,7 +213,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
       {/* Main Grid. xl: chat | calculations | profile. lg: chat | profile, calculations below. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 xl:grid-cols-24 gap-8 items-start">
         {/* Chat */}
-        <div className={`${chatCols} lg:order-1 xl:sticky xl:top-24`}>
+        <div className={`${chatCols} lg:order-1 xl:sticky xl:top-24 min-w-0`}>
           <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-line border-t-[3px] border-t-brand shadow-xs flex flex-col h-[min(62vh,680px)] min-h-[360px] lg:h-[calc(100vh-15rem)] lg:max-h-[820px]"
             style={profileHeight ? { height: profileHeight, maxHeight: 'none' } : undefined}
           >
@@ -341,7 +341,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="כתבו כאן... (למשל: מה יקרה לנטו אם אעבור לרכב חשמלי?)"
-                  className="flex-1 px-4 py-2.5 rounded-full border border-line bg-surface/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                  className="flex-1 min-w-0 px-4 py-2.5 rounded-full border border-line bg-surface/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
                 />
 
                 <button
@@ -379,6 +379,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
                 })
               }
               onShowRankedOptions={() => handleSendMessage('איזה רכב בקטלוג הכי משתלם לי מבחינת הנטו?')}
+              onAskCarFit={sessionId ? (text, history) => api.sessions.carFit(sessionId, text, history) : undefined}
             />
           </div>
         )}

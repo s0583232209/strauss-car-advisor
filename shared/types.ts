@@ -336,6 +336,17 @@ export interface CarHighlightsRecord extends CarHighlights {
   updatedAt: number;
 }
 
+/** One earlier turn of the "beyond the money" car-fit chat (text only; the server reads the profile itself) */
+export interface CarFitTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** POST /api/sessions/:id/car-fit */
+export interface CarFitReply {
+  reply: string;
+}
+
 /** One catalog car on the admin highlights screen */
 export interface AdminHighlightsRow {
   carId: string;

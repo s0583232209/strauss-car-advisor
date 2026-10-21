@@ -21,7 +21,8 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { CarHighlights, ComparisonResult, Rules } from '../../shared/types.ts';
+import { CarFitTurn, CarHighlights, ComparisonResult, Rules } from '../../shared/types.ts';
+import { BeyondMoneyChat } from './BeyondMoneyChat.tsx';
 import { WaterfallChart } from './WaterfallChart.tsx';
 
 /** A rule rate (0.0104) as a percent label ("1.04%") */
@@ -65,6 +66,8 @@ interface ComparisonCardProps {
   onCompareAnother?: () => void;
   onAskRep?: () => void;
   onShowRankedOptions?: () => void;
+  /** "Beyond the money" advisor; absent = the chat is hidden */
+  onAskCarFit?: (text: string, history: CarFitTurn[]) => Promise<string>;
 }
 
 export const ComparisonCard: React.FC<ComparisonCardProps> = ({
@@ -75,6 +78,7 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
   onCompareAnother,
   onAskRep,
   onShowRankedOptions,
+  onAskCarFit,
 }) => {
   const [showHowCalculated, setShowHowCalculated] = useState(false);
 
@@ -243,24 +247,34 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
         </div>
       </div>
 
-      {/* Beyond the money: approved pros and cons of the cars */}
-      {(highlights?.today || highlights?.alt) && (
+      {/* Beyond the money: approved pros and cons of the cars, and the AI advisor */}
+      {(highlights?.today || highlights?.alt || onAskCarFit) && (
         <div className="p-6 border-b border-line">
           <h4 className="text-sm font-bold text-ink mb-3 flex items-center gap-2">
             <CarFront className="w-4 h-4 text-brand-dark" />
-            <span>מעבר לכסף: יתרונות וחסרונות מרכזיים</span>
+            <span>מעבר לכסף</span>
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-3">
-            {highlights.today && (
-              <CarHighlightsColumn title="הרכב היום" carLabel={comparison.todayCarLabel} highlights={highlights.today} />
-            )}
-            {highlights.alt && (
-              <CarHighlightsColumn title="החלופה" carLabel={comparison.altCarLabel} highlights={highlights.alt} />
-            )}
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500">
-            סיכום כללי שאושר על ידי מנהל המערכת. אינו מפרט טכני; לפרטים מלאים פנו ליבואן.
-          </p>
+          {(highlights?.today || highlights?.alt) && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-3">
+                {highlights.today && (
+                  <CarHighlightsColumn title="הרכב היום" carLabel={comparison.todayCarLabel} highlights={highlights.today} />
+                )}
+                {highlights.alt && (
+                  <CarHighlightsColumn title="החלופה" carLabel={comparison.altCarLabel} highlights={highlights.alt} />
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                סיכום כללי שאושר על ידי מנהל המערכת. אינו מפרט טכני; לפרטים מלאים פנו ליבואן.
+              </p>
+            </>
+          )}
+          {/* A new car pair starts a new chat */}
+          {onAskCarFit && (
+            <div className={highlights?.today || highlights?.alt ? 'mt-4' : ''}>
+              <BeyondMoneyChat key={`${comparison.todayCarLabel}|${comparison.altCarLabel}`} onAsk={onAskCarFit} />
+            </div>
+          )}
         </div>
       )}
 

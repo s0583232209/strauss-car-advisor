@@ -3255,6 +3255,19 @@ function messageBody(body) {
   const b = object(body, ["text", "repParticipationMode"], "\u05D4\u05D5\u05D3\u05E2\u05D4");
   return { text: text(b.text, "text", 2e3), repParticipationMode: Boolean(bool(b.repParticipationMode, "repParticipationMode")) };
 }
+var CAR_FIT_HISTORY_MAX = 20;
+function carFitBody(body) {
+  const b = object(body, ["text", "history"], "\u05E9\u05D0\u05DC\u05D4");
+  const raw = b.history ?? [];
+  if (!Array.isArray(raw)) return fail("history: \u05E0\u05D3\u05E8\u05E9\u05EA \u05E8\u05E9\u05D9\u05DE\u05D4");
+  if (raw.length > CAR_FIT_HISTORY_MAX) fail(`history: \u05E2\u05D3 ${CAR_FIT_HISTORY_MAX} \u05D4\u05D5\u05D3\u05E2\u05D5\u05EA`);
+  const history = raw.map((item, i) => {
+    const h = object(item, ["role", "content"], `history[${i}]`);
+    if (h.role !== "user" && h.role !== "assistant") fail(`history[${i}].role: user \u05D0\u05D5 assistant`);
+    return { role: h.role, content: text(h.content, `history[${i}].content`, 2e3) };
+  });
+  return { text: text(b.text, "text", 1e3), history };
+}
 function syncBody(body) {
   const b = object(body ?? {}, ["repParticipationMode"], "\u05E1\u05E0\u05DB\u05E8\u05D5\u05DF");
   return { repParticipationMode: Boolean(bool(b.repParticipationMode, "repParticipationMode")) };
@@ -3547,9 +3560,214 @@ function payslipRouter(extract) {
 
 // server/api/routes/sessions.ts
 import { Router as Router5 } from "express";
-function sessionsRouter(sessions) {
+
+// server/bl/agent/carFit.ts
+var SALARY_ROUNDING = 1e3;
+var MAX_ROUNDS = 4;
+var TURN_TIMEOUT_MS = 25e3;
+var MAX_CARS_PER_TOOL = 8;
+var HISTORY_TURNS = 10;
+var CAR_FIT_FALLBACK_HE = "\u05E1\u05DC\u05D9\u05D7\u05D4, \u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05E0\u05E1\u05D7 \u05EA\u05E9\u05D5\u05D1\u05D4 \u05DE\u05D3\u05D5\u05D9\u05E7\u05EA. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05D0\u05D5\u05DC \u05E9\u05D5\u05D1, \u05D0\u05D5 \u05DC\u05E2\u05D9\u05D9\u05DF \u05D1\u05D9\u05EA\u05E8\u05D5\u05E0\u05D5\u05EA \u05D5\u05D1\u05D7\u05E1\u05E8\u05D5\u05E0\u05D5\u05EA \u05E9\u05D1\u05DB\u05E8\u05D8\u05D9\u05E1.";
+var CAR_FIT_TIMEOUT_HE = "\u05D4\u05EA\u05E9\u05D5\u05D1\u05D4 \u05DC\u05E7\u05D7\u05D4 \u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05D6\u05DE\u05DF. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05D0\u05D5\u05DC \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05E8\u05D2\u05E2?";
+var roundDownToThousands = (n) => Math.floor(n / SALARY_ROUNDING) * SALARY_ROUNDING;
+function carFitProfile(p) {
+  const out = {};
+  if (p.occupation?.trim()) out.occupation = p.occupation.trim();
+  if (p.group) out.group = p.group;
+  if (typeof p.childrenUpTo23 === "number" && Number.isFinite(p.childrenUpTo23)) out.childrenUpTo23 = p.childrenUpTo23;
+  if (typeof p.hasCar === "boolean") out.hasCar = p.hasCar;
+  if (p.hasCar && p.currentCarName?.trim()) out.currentCar = p.currentCarName.trim();
+  if (typeof p.base === "number" && Number.isFinite(p.base) && p.base > 0) out.baseSalaryRoundedDown = roundDownToThousands(p.base);
+  return out;
+}
+var MONEY_AMOUNT = /₪\s*\d|\d[\d,.]*\s*(?:אלף\s*)?(?:₪|ש["״]ח|שקל|NIS)/i;
+function carFitReplyProblem(reply, profile) {
+  if (MONEY_AMOUNT.test(reply)) {
+    return "\u05E9\u05D9\u05DD \u05DC\u05D1: \u05D0\u05E1\u05D5\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E1\u05DB\u05D5\u05DE\u05D9 \u05DB\u05E1\u05E3, \u05DE\u05D7\u05D9\u05E8\u05D9\u05DD \u05D0\u05D5 \u05E2\u05DC\u05D5\u05D9\u05D5\u05EA. \u05E0\u05E1\u05D7 \u05DE\u05D7\u05D3\u05E9 \u05D1\u05DC\u05D9 \u05E1\u05DB\u05D5\u05DE\u05D9\u05DD, \u05D5\u05D4\u05E4\u05E0\u05D4 \u05DC\u05DB\u05E8\u05D8\u05D9\u05E1 \u05D4\u05D4\u05E9\u05D5\u05D5\u05D0\u05D4 \u05DC\u05DB\u05DC \u05E9\u05D0\u05DC\u05D4 \u05DB\u05E1\u05E4\u05D9\u05EA.";
+  }
+  const salary = carFitProfile(profile).baseSalaryRoundedDown;
+  if (salary && extractNumbers(reply).some((n) => n.value === salary || n.value === profile.base)) {
+    return "\u05E9\u05D9\u05DD \u05DC\u05D1: \u05D0\u05E1\u05D5\u05E8 \u05DC\u05E6\u05D9\u05D9\u05DF \u05D0\u05EA \u05D4\u05E9\u05DB\u05E8 \u05E9\u05DC \u05D4\u05E2\u05D5\u05D1\u05D3, \u05D2\u05DD \u05DC\u05D0 \u05DE\u05E2\u05D5\u05D2\u05DC. \u05E0\u05E1\u05D7 \u05DE\u05D7\u05D3\u05E9 \u05D1\u05DC\u05D9 \u05D4\u05E9\u05DB\u05E8.";
+  }
+  return null;
+}
+function carIdentity(car, employeeGroup, highlights) {
+  return {
+    carId: car.id,
+    name: `${car.make} ${car.model}`,
+    year: car.year,
+    fuel: car.fuel,
+    group: car.group,
+    // Family-track cars are chosen in the main chat only; unknown group = not known yet
+    selectableByEmployee: employeeGroup ? canSelectCarGroup(employeeGroup, car.group) : null,
+    ...highlights[car.id] ? { approvedPros: highlights[car.id].pros, approvedCons: highlights[car.id].cons } : {}
+  };
+}
+var CAR_FIT_TOOLS = [
+  {
+    name: "get_car_details",
+    description: "Look up a catalog car by id or by (partial) name. Returns identity, drive type, eligibility group, whether the employee may choose it, and admin-approved pros and cons. No prices.",
+    parameters: {
+      type: "OBJECT",
+      properties: { query: { type: "string", description: "Catalog id (CAR-03) or car name as the employee wrote it" } },
+      required: ["query"]
+    }
+  },
+  {
+    name: "list_my_cars",
+    description: "The catalog cars the employee may choose in their eligibility group (own group or lower), with drive type and approved pros and cons.",
+    parameters: { type: "OBJECT", properties: {} }
+  }
+];
+function executeCarFitTool(name, args, ctx) {
+  const group = ctx.profile.group;
+  const view = (car) => carIdentity(car, group, ctx.highlights);
+  if (name === "get_car_details") {
+    const query = typeof args?.query === "string" ? args.query : "";
+    if (!query.trim()) return { error: "query is required" };
+    const { matches: matches2, suggestions } = searchCars(query, group);
+    if (matches2.length) return { matches: matches2.slice(0, MAX_CARS_PER_TOOL).map(view) };
+    return { matches: [], didYouMean: suggestions.map(view), note: "\u05D4\u05E8\u05DB\u05D1 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05D1\u05E7\u05D8\u05DC\u05D5\u05D2" };
+  }
+  if (name === "list_my_cars") {
+    if (!group) return { cars: [], note: "\u05E7\u05D1\u05D5\u05E6\u05EA \u05D4\u05D6\u05DB\u05D0\u05D5\u05EA \u05E9\u05DC \u05D4\u05E2\u05D5\u05D1\u05D3 \u05E2\u05D5\u05D3 \u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2\u05D4" };
+    return { cars: getCatalog().filter((c) => canSelectCarGroup(group, c.group)).map(view) };
+  }
+  return { error: `unknown tool ${name}` };
+}
+var carLine = (label, id, ctx) => {
+  const car = id ? getCatalog().find((c) => c.id === id) : void 0;
+  return car ? `- ${label}: ${JSON.stringify(carIdentity(car, ctx.profile.group, ctx.highlights))}` : `- ${label}: \u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2`;
+};
+var selectableCarsLine = (ctx) => {
+  const group = ctx.profile.group;
+  if (!group) return "\u05E7\u05D1\u05D5\u05E6\u05EA \u05D4\u05D6\u05DB\u05D0\u05D5\u05EA \u05E2\u05D5\u05D3 \u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2\u05D4: \u05D0\u05DC \u05EA\u05DE\u05DC\u05D9\u05E5 \u05E2\u05DC \u05E8\u05DB\u05D1 \u05DE\u05E1\u05D5\u05D9\u05DD, \u05D5\u05D1\u05E7\u05E9 \u05DE\u05D4\u05E2\u05D5\u05D1\u05D3 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05D0\u05D5\u05EA\u05D4 \u05D1\u05E6'\u05D0\u05D8 \u05D4\u05E8\u05D0\u05E9\u05D9.";
+  return getCatalog().filter((c) => canSelectCarGroup(group, c.group)).map((c) => `- ${c.make} ${c.model} (${c.fuel}, \u05E7\u05D1\u05D5\u05E6\u05D4 ${c.group})`).join("\n");
+};
+function carFitSystemPrompt(ctx) {
+  return `
+\u05D0\u05EA\u05D4 \u05E1\u05D5\u05DB\u05DF \u05E8\u05DB\u05D1 \u05DE\u05D5\u05DE\u05D7\u05D4 \u05E2\u05DD 30 \u05E9\u05E0\u05D5\u05EA \u05E0\u05D9\u05E1\u05D9\u05D5\u05DF, \u05D5\u05DE\u05DB\u05D9\u05E8 \u05DC\u05E2\u05D5\u05DE\u05E7 \u05DB\u05DC \u05D0\u05D7\u05D3 \u05DE\u05D4\u05E8\u05DB\u05D1\u05D9\u05DD \u05D1\u05E7\u05D8\u05DC\u05D5\u05D2 \u05D4\u05E8\u05DB\u05D1\u05D9\u05DD \u05E9\u05DC \u05E9\u05D8\u05E8\u05D0\u05D5\u05E1: \u05DE\u05D1\u05E0\u05D4, \u05DE\u05E8\u05D7\u05D1, \u05E0\u05D5\u05D7\u05D5\u05EA,
+\u05D1\u05D8\u05D9\u05D7\u05D5\u05EA, \u05D4\u05E0\u05E2\u05D4, \u05D8\u05E2\u05D9\u05E0\u05D4, \u05D0\u05DE\u05D9\u05E0\u05D5\u05EA, \u05D4\u05EA\u05E0\u05D4\u05D2\u05D5\u05EA \u05D1\u05E2\u05D9\u05E8 \u05D5\u05D1\u05DB\u05D1\u05D9\u05E9 \u05D4\u05DE\u05D4\u05D9\u05E8. \u05D0\u05EA\u05D4 "\u05D4\u05D9\u05D5\u05E2\u05E5 \u05DE\u05E2\u05D1\u05E8 \u05DC\u05DB\u05E1\u05E3": \u05E2\u05D5\u05D6\u05E8 \u05DC\u05E2\u05D5\u05D1\u05D3 \u05DC\u05D1\u05D7\u05D5\u05E8 \u05E8\u05DB\u05D1 \u05D7\u05D1\u05E8\u05D4
+\u05E9\u05DE\u05EA\u05D0\u05D9\u05DD \u05DC\u05D7\u05D9\u05D9\u05DD \u05E9\u05DC\u05D5, \u05DC\u05D0 \u05DC\u05E4\u05D9 \u05D4\u05DB\u05E1\u05E3. \u05D4\u05D4\u05E9\u05D5\u05D5\u05D0\u05D4 \u05D4\u05DB\u05E1\u05E4\u05D9\u05EA (\u05E0\u05D8\u05D5, \u05DE\u05E1, \u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9) \u05DB\u05D1\u05E8 \u05DE\u05D5\u05E6\u05D2\u05EA \u05DC\u05E2\u05D5\u05D1\u05D3 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1 \u05D5\u05D1\u05E6'\u05D0\u05D8 \u05D4\u05E8\u05D0\u05E9\u05D9.
+
+\u05E4\u05E8\u05D8\u05D9 \u05D4\u05E2\u05D5\u05D1\u05D3 (\u05D1\u05DC\u05D9 \u05E0\u05EA\u05D5\u05E0\u05D9 \u05E9\u05DB\u05E8 \u05DE\u05DC\u05D0\u05D9\u05DD, \u05D4\u05E9\u05DB\u05E8 \u05DE\u05E2\u05D5\u05D2\u05DC \u05DB\u05DC\u05E4\u05D9 \u05DE\u05D8\u05D4 \u05DC\u05D0\u05DC\u05E4\u05D9\u05DD):
+${JSON.stringify(carFitProfile(ctx.profile))}
+
+\u05D4\u05E8\u05DB\u05D1\u05D9\u05DD \u05D1\u05D4\u05E9\u05D5\u05D5\u05D0\u05D4:
+${carLine("\u05D4\u05E8\u05DB\u05D1 \u05D4\u05D9\u05D5\u05DD", ctx.todayCarId, ctx)}
+${carLine("\u05D4\u05D7\u05DC\u05D5\u05E4\u05D4", ctx.altCarId, ctx)}
+
+\u05D4\u05E8\u05DB\u05D1\u05D9\u05DD \u05E9\u05D4\u05E2\u05D5\u05D1\u05D3 \u05E8\u05E9\u05D0\u05D9 \u05DC\u05D1\u05D7\u05D5\u05E8 (\u05D4\u05E8\u05E9\u05D9\u05DE\u05D4 \u05D4\u05DE\u05DC\u05D0\u05D4; \u05D0\u05D9\u05DF \u05D0\u05D7\u05E8\u05D9\u05DD):
+${selectableCarsLine(ctx)}
+
+\u05DB\u05DC\u05DC\u05D9\u05DD:
+1. \u05EA\u05DE\u05D9\u05D3 \u05EA\u05DF \u05EA\u05E9\u05D5\u05D1\u05D4 \u05E2\u05E0\u05D9\u05D9\u05E0\u05D9\u05EA. \u05D0\u05DC \u05EA\u05EA\u05D7\u05DE\u05E7 \u05D5\u05D0\u05DC \u05EA\u05E2\u05E0\u05D4 "\u05D0\u05D9\u05DF \u05DC\u05D9 \u05DE\u05D9\u05D3\u05E2" \u05DB\u05E9\u05D0\u05EA\u05D4 \u05DE\u05DB\u05D9\u05E8 \u05D0\u05EA \u05D4\u05D3\u05D2\u05DD.
+2. \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D8\u05DB\u05E0\u05D9\u05D9\u05DD (\u05D8\u05D5\u05D5\u05D7, \u05E6\u05E8\u05D9\u05DB\u05EA \u05D3\u05DC\u05E7 \u05D0\u05D5 \u05D7\u05E9\u05DE\u05DC, \u05DB\u05D5\u05D7 \u05E1\u05D5\u05E1, \u05EA\u05D0\u05D5\u05E6\u05D4, \u05E0\u05E4\u05D7 \u05DE\u05D8\u05E2\u05DF, \u05DE\u05D9\u05D3\u05D5\u05EA, \u05DE\u05E1\u05E4\u05E8 \u05DE\u05D5\u05E9\u05D1\u05D9\u05DD, \u05D6\u05DE\u05DF \u05D8\u05E2\u05D9\u05E0\u05D4) \u05DE\u05D5\u05EA\u05E8 \u05D5\u05E6\u05E8\u05D9\u05DA
+   \u05DC\u05EA\u05EA, \u05D1\u05E2\u05E8\u05DA, \u05DC\u05E4\u05D9 \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05E6\u05E8\u05DF \u05DC\u05E9\u05E0\u05EA\u05D5\u05DF \u05D5\u05DC\u05D2\u05E8\u05E1\u05D4 \u05D4\u05E0\u05E4\u05D5\u05E6\u05D4 \u05D1\u05D9\u05E9\u05E8\u05D0\u05DC. \u05DB\u05EA\u05D5\u05D1 "\u05D1\u05E2\u05E8\u05DA" \u05D0\u05D5 "\u05DC\u05E4\u05D9 \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05E6\u05E8\u05DF", \u05D5\u05D1\u05D8\u05D5\u05D5\u05D7 (\u05DC\u05DE\u05E9\u05DC
+   "\u05DB-400 \u05E2\u05D3 450 \u05E7"\u05DE \u05DC\u05E4\u05D9 WLTP"). \u05D1\u05D8\u05D5\u05D5\u05D7 \u05E0\u05E1\u05D9\u05E2\u05D4 \u05D5\u05D1\u05E6\u05E8\u05D9\u05DB\u05D4 \u05D4\u05D5\u05E1\u05E3 \u05E9\u05D1\u05E4\u05D5\u05E2\u05DC \u05D6\u05D4 \u05EA\u05DC\u05D5\u05D9 \u05D1\u05DE\u05D9\u05D6\u05D5\u05D2, \u05D1\u05DE\u05D4\u05D9\u05E8\u05D5\u05EA, \u05D1\u05E2\u05D5\u05DE\u05E1, \u05D1\u05D8\u05DE\u05E4\u05E8\u05D8\u05D5\u05E8\u05D4
+   \u05D5\u05D1\u05E1\u05D2\u05E0\u05D5\u05DF \u05D4\u05E0\u05D4\u05D9\u05D2\u05D4, \u05D5\u05EA\u05DF \u05D4\u05E2\u05E8\u05DB\u05D4 \u05DE\u05E2\u05E9\u05D9\u05EA \u05DC\u05E9\u05D9\u05DE\u05D5\u05E9 \u05D9\u05D5\u05DE\u05D9\u05D5\u05DE\u05D9. \u05D0\u05DD \u05D0\u05D9\u05E0\u05DA \u05D1\u05D8\u05D5\u05D7 \u05D1\u05D2\u05E8\u05E1\u05D4 \u05D4\u05DE\u05D3\u05D5\u05D9\u05E7\u05EA, \u05D0\u05DE\u05D5\u05E8 \u05D6\u05D0\u05EA \u05D5\u05EA\u05DF \u05D0\u05EA \u05D4\u05D8\u05D5\u05D5\u05D7 \u05D4\u05E1\u05D1\u05D9\u05E8.
+3. \u05D0\u05E1\u05D5\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E1\u05DB\u05D5\u05DE\u05D9 \u05DB\u05E1\u05E3: \u05DC\u05D0 \u05DE\u05D7\u05D9\u05E8, \u05DC\u05D0 \u05E0\u05D8\u05D5, \u05DC\u05D0 \u05DE\u05E1, \u05DC\u05D0 \u05E9\u05D5\u05D5\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9, \u05DC\u05D0 \u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA, \u05DC\u05D0 \u05E2\u05DC\u05D5\u05EA \u05D3\u05DC\u05E7 \u05D0\u05D5 \u05D8\u05E2\u05D9\u05E0\u05D4 \u05D1\u05E9\u05E7\u05DC\u05D9\u05DD.
+   \u05E2\u05DC \u05E9\u05D0\u05DC\u05D4 \u05DB\u05E1\u05E4\u05D9\u05EA \u05E2\u05E0\u05D4 \u05D1\u05DE\u05E9\u05E4\u05D8 \u05D0\u05D7\u05D3 \u05E9\u05D4\u05E4\u05D9\u05E8\u05D5\u05D8 \u05D4\u05DB\u05E1\u05E4\u05D9 \u05DE\u05D5\u05E4\u05D9\u05E2 \u05D1\u05DB\u05E8\u05D8\u05D9\u05E1 \u05D4\u05D4\u05E9\u05D5\u05D5\u05D0\u05D4, \u05D5\u05D4\u05DE\u05E9\u05DA \u05D1\u05D4\u05D9\u05D1\u05D8\u05D9\u05DD \u05E9\u05D0\u05D9\u05E0\u05DD \u05DB\u05E1\u05E3.
+4. \u05E2\u05E0\u05D4 \u05E7\u05D5\u05D3\u05DD \u05DB\u05D5\u05DC \u05D9\u05E9\u05D9\u05E8\u05D5\u05EA \u05E2\u05DC \u05D4\u05E9\u05D0\u05DC\u05D4 \u05E9\u05E0\u05E9\u05D0\u05DC\u05D4, \u05D5\u05D0\u05D6 \u05D4\u05D5\u05E1\u05E3 \u05D0\u05EA \u05DE\u05D4 \u05E9\u05E1\u05D5\u05DB\u05DF \u05DE\u05E7\u05E6\u05D5\u05E2\u05D9 \u05D4\u05D9\u05D4 \u05DE\u05D5\u05E1\u05D9\u05E3: \u05DC\u05DE\u05D4 \u05D6\u05D4 \u05D7\u05E9\u05D5\u05D1 \u05DC\u05E2\u05D5\u05D1\u05D3 \u05D4\u05D6\u05D4, \u05D5\u05E2\u05DC \u05DE\u05D4
+   \u05DB\u05D3\u05D0\u05D9 \u05DC\u05E9\u05D9\u05DD \u05DC\u05D1 \u05D1\u05E0\u05E1\u05D9\u05E2\u05EA \u05DE\u05D1\u05D7\u05DF (\u05DC\u05DE\u05E9\u05DC \u05D2\u05D5\u05D1\u05D4 \u05D9\u05E9\u05D9\u05D1\u05D4, \u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05DE\u05D5\u05E9\u05D1 \u05D4\u05D0\u05D7\u05D5\u05E8\u05D9, \u05DE\u05D5\u05E9\u05D1\u05D9 \u05D1\u05D8\u05D9\u05D7\u05D5\u05EA \u05DC\u05D9\u05DC\u05D3\u05D9\u05DD, \u05E8\u05D0\u05D5\u05EA \u05DC\u05D0\u05D7\u05D5\u05E8).
+5. \u05D4\u05DE\u05DC\u05E5 \u05D5\u05D4\u05E6\u05E2 \u05E8\u05E7 \u05E8\u05DB\u05D1\u05D9\u05DD \u05DE\u05D4\u05E8\u05E9\u05D9\u05DE\u05D4 "\u05D4\u05E8\u05DB\u05D1\u05D9\u05DD \u05E9\u05D4\u05E2\u05D5\u05D1\u05D3 \u05E8\u05E9\u05D0\u05D9 \u05DC\u05D1\u05D7\u05D5\u05E8" \u05DC\u05DE\u05E2\u05DC\u05D4, \u05D1\u05E9\u05DD \u05E9\u05DE\u05D5\u05E4\u05D9\u05E2 \u05E9\u05DD. \u05DC\u05E2\u05D5\u05DC\u05DD \u05D0\u05DC \u05EA\u05E6\u05D9\u05E2 \u05E8\u05DB\u05D1 \u05D0\u05D5 \u05D2\u05E8\u05E1\u05D4
+   \u05E9\u05D0\u05D9\u05E0\u05DD \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4 (\u05D2\u05DD \u05DC\u05D0 \u05D3\u05D2\u05DD \u05D3\u05D5\u05DE\u05D4 \u05E9\u05DC \u05D0\u05D5\u05EA\u05D5 \u05D9\u05E6\u05E8\u05DF). \u05DB\u05E9\u05D4\u05E2\u05D5\u05D1\u05D3 \u05E9\u05D5\u05D0\u05DC \u05D0\u05D9\u05D6\u05D4 \u05E8\u05DB\u05D1 \u05DE\u05EA\u05D0\u05D9\u05DD \u05DC\u05D5: \u05D4\u05DE\u05DC\u05E5 \u05E2\u05DC \u05E2\u05D3 3 \u05E8\u05DB\u05D1\u05D9\u05DD, \u05DE\u05D4\u05DE\u05EA\u05D0\u05D9\u05DD \u05D1\u05D9\u05D5\u05EA\u05E8, \u05E2\u05DD \u05E0\u05D9\u05DE\u05D5\u05E7
+   \u05DE\u05E7\u05E6\u05D5\u05E2\u05D9 \u05DC\u05DB\u05DC \u05D0\u05D7\u05D3 \u05DC\u05E4\u05D9 \u05DE\u05D4 \u05E9\u05E1\u05D9\u05E4\u05E8. \u05D4\u05D4\u05DE\u05DC\u05E6\u05D4 \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05D4\u05EA\u05D0\u05D9\u05DD \u05DC\u05DB\u05DC \u05DE\u05D4 \u05E9\u05E1\u05D9\u05E4\u05E8: \u05DC\u05DE\u05E9\u05DC \u05D1\u05DC\u05D9 \u05D0\u05E4\u05E9\u05E8\u05D5\u05EA \u05D8\u05E2\u05D9\u05E0\u05D4 \u05D1\u05D1\u05D9\u05EA \u05D0\u05D5 \u05D1\u05E2\u05D1\u05D5\u05D3\u05D4,
+   \u05D0\u05DC \u05EA\u05DE\u05DC\u05D9\u05E5 \u05E2\u05DC \u05E8\u05DB\u05D1 \u05D7\u05E9\u05DE\u05DC\u05D9 (\u05D5\u05D0\u05E4\u05E9\u05E8 \u05DC\u05D4\u05E6\u05D9\u05E2 \u05D4\u05D9\u05D1\u05E8\u05D9\u05D3\u05D9).
+6. \u05D0\u05DC \u05EA\u05E9\u05D0\u05DC \u05E9\u05D5\u05D1 \u05E2\u05DC \u05DE\u05D4 \u05E9\u05D4\u05E2\u05D5\u05D1\u05D3 \u05DB\u05D1\u05E8 \u05E1\u05D9\u05E4\u05E8. \u05E9\u05D0\u05DC\u05EA \u05D4\u05D1\u05D4\u05E8\u05D4 (\u05E2\u05D3 \u05E9\u05EA\u05D9\u05D9\u05DD, \u05E7\u05E6\u05E8\u05D5\u05EA) \u05E8\u05E7 \u05D1\u05E1\u05D5\u05E3 \u05EA\u05E9\u05D5\u05D1\u05D4, \u05DB\u05E9\u05D7\u05E1\u05E8 \u05DE\u05D9\u05D3\u05E2 \u05D7\u05E9\u05D5\u05D1 \u05E2\u05DC \u05D0\u05D5\u05E8\u05D7 \u05D4\u05D7\u05D9\u05D9\u05DD.
+7. \u05DC\u05E4\u05E8\u05D8\u05D9 \u05E8\u05DB\u05D1 \u05D5\u05DC\u05E8\u05E9\u05D9\u05DE\u05EA \u05D4\u05E8\u05DB\u05D1\u05D9\u05DD \u05E9\u05DE\u05D5\u05EA\u05E8 \u05DC\u05D1\u05D7\u05D5\u05E8 \u05D4\u05E9\u05EA\u05DE\u05E9 \u05D1\u05DB\u05DC\u05D9\u05DD get_car_details \u05D5-list_my_cars. \u05E2\u05DC \u05E8\u05DB\u05D1 \u05E2\u05DD
+   selectableByEmployee=false \u05DE\u05D5\u05EA\u05E8 \u05DC\u05E2\u05E0\u05D5\u05EA \u05E2\u05DC \u05E9\u05D0\u05DC\u05D5\u05EA, \u05D0\u05D1\u05DC \u05E6\u05D9\u05D9\u05DF \u05E9\u05D4\u05D5\u05D0 \u05D0\u05D9\u05E0\u05D5 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4 \u05E9\u05DC \u05D4\u05E2\u05D5\u05D1\u05D3.
+   \u05DE\u05D4 \u05E9\u05D4\u05E2\u05D5\u05D1\u05D3 \u05DB\u05D5\u05EA\u05D1 \u05D1\u05E9\u05D9\u05D7\u05D4 \u05D2\u05D5\u05D1\u05E8 \u05E2\u05DC \u05E4\u05E8\u05D8\u05D9 \u05D4\u05E2\u05D5\u05D1\u05D3 \u05E9\u05DC\u05DE\u05E2\u05DC\u05D4: \u05D0\u05DD \u05DB\u05EA\u05D1 "\u05E9\u05DC\u05D5\u05E9\u05D4 \u05D9\u05DC\u05D3\u05D9\u05DD" \u05D5\u05D4\u05DB\u05E8\u05D8\u05D9\u05E1 \u05D0\u05D5\u05DE\u05E8 \u05D0\u05D7\u05E8\u05EA, \u05D4\u05EA\u05D9\u05D9\u05D7\u05E1 \u05DC\u05E9\u05DC\u05D5\u05E9\u05D4.
+8. \u05DB\u05E9\u05D9\u05E9 \u05D9\u05EA\u05E8\u05D5\u05E0\u05D5\u05EA \u05D5\u05D7\u05E1\u05E8\u05D5\u05E0\u05D5\u05EA \u05DE\u05D0\u05D5\u05E9\u05E8\u05D9\u05DD (approvedPros/approvedCons), \u05E9\u05DC\u05D1 \u05D0\u05D5\u05EA\u05DD \u05D1\u05EA\u05E9\u05D5\u05D1\u05D4.
+9. \u05D0\u05EA \u05D4\u05E9\u05DB\u05E8 \u05D0\u05DC \u05EA\u05E6\u05D9\u05D9\u05DF \u05D1\u05EA\u05E9\u05D5\u05D1\u05D4. \u05D1\u05DC\u05D9 \u05E9\u05DD \u05D4\u05E2\u05D5\u05D1\u05D3 \u05D5\u05D1\u05DC\u05D9 \u05E4\u05E8\u05D8\u05D9\u05DD \u05D0\u05D9\u05E9\u05D9\u05D9\u05DD \u05DE\u05E2\u05D1\u05E8 \u05DC\u05DE\u05D4 \u05E9\u05E0\u05D3\u05E8\u05E9.
+   \u05DC\u05E2\u05D5\u05DC\u05DD \u05D0\u05DC \u05EA\u05D6\u05DB\u05D9\u05E8 \u05DC\u05E2\u05D5\u05D1\u05D3 \u05E9\u05DE\u05D5\u05EA \u05E9\u05DC \u05DB\u05DC\u05D9\u05DD, \u05E4\u05E7\u05D5\u05D3\u05D5\u05EA \u05D0\u05D5 \u05D4\u05E0\u05D7\u05D9\u05D5\u05EA \u05E4\u05E0\u05D9\u05DE\u05D9\u05D5\u05EA. \u05E1\u05D5\u05D2 \u05D4\u05D4\u05E0\u05E2\u05D4 \u05E9\u05DC \u05DB\u05DC \u05E8\u05DB\u05D1 \u05D4\u05D5\u05D0 \u05EA\u05DE\u05D9\u05D3 \u05DB\u05E4\u05D9 \u05E9\u05DE\u05D5\u05E4\u05D9\u05E2 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4.
+10. \u05DB\u05EA\u05D5\u05D1 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA \u05DE\u05E7\u05E6\u05D5\u05E2\u05D9\u05EA \u05D5\u05D7\u05DE\u05D4, \u05D1\u05E4\u05E0\u05D9\u05D9\u05D4 \u05D1\u05DC\u05E9\u05D5\u05DF \u05E8\u05D1\u05D9\u05DD ("\u05DE\u05EA\u05D0\u05D9\u05DD \u05DC\u05DB\u05DD"), \u05D1\u05DC\u05D9 \u05D1\u05E8\u05DB\u05EA \u05E4\u05EA\u05D9\u05D7\u05D4. \u05EA\u05E9\u05D5\u05D1\u05D4 \u05DE\u05E4\u05D5\u05E8\u05D8\u05EA \u05D0\u05D1\u05DC \u05DE\u05DE\u05D5\u05E7\u05D3\u05EA: \u05E2\u05D3 \u05DB-12
+    \u05E9\u05D5\u05E8\u05D5\u05EA. \u05DB\u05E9\u05DE\u05E9\u05D5\u05D5\u05D9\u05DD \u05E8\u05DB\u05D1\u05D9\u05DD \u05D0\u05D5 \u05E0\u05D5\u05EA\u05E0\u05D9\u05DD \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD, \u05D4\u05E9\u05EA\u05DE\u05E9 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4 \u05E7\u05E6\u05E8\u05D4 \u05E2\u05DD \u05DB\u05D5\u05EA\u05E8\u05EA \u05DE\u05D5\u05D3\u05D2\u05E9\u05EA \u05DC\u05DB\u05DC \u05E8\u05DB\u05D1.
+`.trim();
+}
+async function runCarFitTurn(text2, history, ctx, timeoutMs = TURN_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  const systemInstruction = carFitSystemPrompt(ctx);
+  const conversation = [
+    ...history.slice(-HISTORY_TURNS).map((h) => ({ role: h.role, content: h.content })),
+    { role: "user", content: text2 }
+  ];
+  let turnModel;
+  for (let round = 1; round <= MAX_ROUNDS; round++) {
+    let response;
+    try {
+      response = await callLlm({
+        messages: conversation,
+        tools: CAR_FIT_TOOLS,
+        systemInstruction,
+        preferredModel: turnModel,
+        deadline
+      });
+    } catch (err) {
+      if (err instanceof LlmDeadlineError) return CAR_FIT_TIMEOUT_HE;
+      throw err;
+    }
+    if (response.model) turnModel = response.model;
+    if (response.functionCalls?.length) {
+      const responses = response.functionCalls.map((call) => ({
+        name: call.name,
+        ...call.id ? { id: call.id } : {},
+        response: executeCarFitTool(call.name, call.args, ctx)
+      }));
+      conversation.push({
+        role: "model_content",
+        content: response.modelContent ?? {
+          role: "model",
+          parts: response.functionCalls.map((c) => ({ functionCall: { name: c.name, args: c.args } }))
+        }
+      });
+      conversation.push({ role: "tool_responses", responses });
+      continue;
+    }
+    const reply = (response.text || "").trim();
+    if (!reply) continue;
+    const problem = carFitReplyProblem(reply, ctx.profile);
+    if (!problem) return reply;
+    conversation.push({ role: "assistant", content: reply });
+    conversation.push({ role: "user", content: problem });
+  }
+  return CAR_FIT_FALLBACK_HE;
+}
+
+// server/bl/services/carFitService.ts
+var CarFitError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+};
+function createCarFitService(sessions, highlights) {
+  return {
+    async ask(sessionId2, text2, history) {
+      const { profile, lastComparison } = await sessions.get(sessionId2);
+      const todayCarId = profile.hasCar ? profile.currentCarId ?? void 0 : void 0;
+      const altId = lastComparison?.targetCar?.id;
+      const approved = highlights ? await highlights.approved() : {};
+      try {
+        return await runCarFitTurn(text2, history, {
+          profile,
+          todayCarId,
+          altCarId: altId && altId !== todayCarId ? altId : void 0,
+          highlights: approved
+        });
+      } catch (err) {
+        console.warn(`[car-fit] turn failed: ${err?.name ?? "Error"} (${err?.status ?? "-"})`);
+        throw new CarFitError(503, "\u05D4\u05D9\u05D5\u05E2\u05E5 \u05DC\u05D0 \u05D6\u05DE\u05D9\u05DF \u05DB\u05E8\u05D2\u05E2. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05D3\u05E7\u05D4");
+      }
+    }
+  };
+}
+
+// server/api/routes/sessions.ts
+function sessionsRouter(sessions, carFit) {
   const router = Router5();
   const messageLimit = rateLimit({ name: "messages", windowMs: 6e4, max: 30 });
+  const carFitLimit = rateLimit({ name: "car-fit", windowMs: 6e4, max: 20 });
   const createLimit = rateLimit({ name: "session-create", windowMs: 6e4, max: 20 });
   const userId = (res) => res.locals.user?.id;
   router.param("id", (req, res, next, raw) => {
@@ -3616,6 +3834,17 @@ function sessionsRouter(sessions) {
     }
     res.end();
   }));
+  if (carFit) {
+    router.post("/:id/car-fit", carFitLimit, asyncHandler(async (req, res) => {
+      const { text: text2, history } = carFitBody(req.body);
+      const body = { reply: await carFit.ask(sessionId(req.params.id), text2, history) };
+      res.json(body);
+    }));
+  }
+  router.use((err, _req, res, next) => {
+    if (err instanceof CarFitError) res.status(err.status).json({ error: err.message });
+    else next(err);
+  });
   return router;
 }
 
@@ -3656,7 +3885,7 @@ function createApp(deps) {
   api.use("/admin", requireRole(auth, ["admin"]), adminRouter(deps.admin, auth));
   api.use(express4.json({ limit: "100kb" }));
   api.use("/auth", authRouter(auth, config.isProduction));
-  api.use("/sessions", anyUser, sessionsRouter(deps.sessions));
+  api.use("/sessions", anyUser, sessionsRouter(deps.sessions, deps.carFit));
   api.use("/tickets", ticketsRouter(deps.tickets, requireRole(auth, ["rep", "admin"])));
   api.get("/health", (_req, res) => {
     res.json({
@@ -5382,6 +5611,7 @@ async function buildApiApp(config) {
   const sessions = createSessionService(repo);
   const tickets = createTicketService(repo);
   const highlights = createHighlightsService(repo, config.gemini.apiKey ? gemini.draftCarHighlights : null);
+  const carFit = createCarFitService(sessions, highlights);
   const auth = authGateway ? createAuthService(authGateway, repo) : null;
   const app = createApp({
     config,
@@ -5390,6 +5620,7 @@ async function buildApiApp(config) {
     admin,
     auth,
     highlights,
+    carFit,
     extractPayslip: gemini.extractPayslip,
     healthDetails: () => ({ ...gemini.status(), storage: repo.kind })
   });
