@@ -13,6 +13,8 @@ import type {
   AdminOverview,
   AuthStatus,
   AuthUser,
+  CarFitReply,
+  CarFitTurn,
   CarHighlights,
   CarHighlightsRecord,
   ChatStreamEvent,
@@ -168,6 +170,9 @@ export const api = {
     askRep: (id: string) => request<SessionState>('POST', `/sessions/${id}/tickets`),
     sync: (id: string, repParticipationMode: boolean) =>
       request<SessionState>('POST', `/sessions/${id}/sync`, { body: { repParticipationMode } }),
+    /** "Beyond the money" advisor: one question with the earlier turns of that chat */
+    carFit: async (id: string, text: string, history: CarFitTurn[]) =>
+      (await request<CarFitReply>('POST', `/sessions/${id}/car-fit`, { body: { text, history } })).reply,
 
     /** One agent turn; onEvent gets the status lines while the agent works. Resolves with the session. */
     async sendMessage(

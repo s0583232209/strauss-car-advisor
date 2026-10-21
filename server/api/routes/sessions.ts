@@ -9,16 +9,19 @@
  * session id held by the browser is what gives access, as before.
  */
 
-import { Router, type Response } from 'express';
-import type { AuthUser, ChatStreamEvent } from '../../../shared/types.ts';
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import type { AuthUser, CarFitReply, ChatStreamEvent } from '../../../shared/types.ts';
+import { CarFitError, type CarFitService } from '../../bl/services/carFitService.ts';
 import type { SessionService } from '../../bl/services/sessionService.ts';
 import { asyncHandler, rateLimit } from '../middleware.ts';
-import { messageBody, profileUpdateBody, sampleBody, sessionId, syncBody } from '../validate.ts';
+import { carFitBody, messageBody, profileUpdateBody, sampleBody, sessionId, syncBody } from '../validate.ts';
 
-export function sessionsRouter(sessions: SessionService): Router {
+/** carFit absent = the "beyond the money" chat is off (older tests) */
+export function sessionsRouter(sessions: SessionService, carFit?: CarFitService): Router {
   const router = Router();
   // Each message may cost several model calls: keep abuse cheap
   const messageLimit = rateLimit({ name: 'messages', windowMs: 60_000, max: 30 });
+  const carFitLimit = rateLimit({ name: 'car-fit', windowMs: 60_000, max: 20 });
   const createLimit = rateLimit({ name: 'session-create', windowMs: 60_000, max: 20 });
 
   // Set by requireRole; undefined only when the server has no login
@@ -108,6 +111,21 @@ export function sessionsRouter(sessions: SessionService): Router {
     }
     res.end();
   }));
+
+  // "Beyond the money": which car fits the employee's life (no money, no full pay data to the model)
+  if (carFit) {
+    router.post('/:id/car-fit', carFitLimit, asyncHandler(async (req, res) => {
+      const { text, history } = carFitBody(req.body);
+      const body: CarFitReply = { reply: await carFit.ask(sessionId(req.params.id), text, history) };
+      res.json(body);
+    }));
+  }
+
+  // Known failures are answered here: the API error handler hides every 5xx message
+  router.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof CarFitError) res.status(err.status).json({ error: err.message });
+    else next(err);
+  });
 
   return router;
 }

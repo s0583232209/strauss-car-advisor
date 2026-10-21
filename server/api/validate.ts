@@ -5,7 +5,7 @@
 
 /** Input validation for every API body and parameter (unknown fields are rejected) */
 
-import type { CarHighlights, EmployeeProfile, UserRole } from '../../shared/types.ts';
+import type { CarFitTurn, CarHighlights, EmployeeProfile, UserRole } from '../../shared/types.ts';
 import { PAYSLIP_FIELDS } from '../bl/services/payslipService.ts';
 import { MAX_HIGHLIGHT_LENGTH, MAX_HIGHLIGHTS } from '../bl/services/highlightsService.ts';
 import { HttpError } from './middleware.ts';
@@ -58,6 +58,22 @@ export function ticketId(v: unknown): string {
 export function messageBody(body: unknown): { text: string; repParticipationMode: boolean } {
   const b = object(body, ['text', 'repParticipationMode'], 'הודעה');
   return { text: text(b.text, 'text', 2000)!, repParticipationMode: Boolean(bool(b.repParticipationMode, 'repParticipationMode')) };
+}
+
+const CAR_FIT_HISTORY_MAX = 20;
+
+/** "Beyond the money" question with the earlier turns of that chat (text only) */
+export function carFitBody(body: unknown): { text: string; history: CarFitTurn[] } {
+  const b = object(body, ['text', 'history'], 'שאלה');
+  const raw = b.history ?? [];
+  if (!Array.isArray(raw)) return fail('history: נדרשת רשימה');
+  if (raw.length > CAR_FIT_HISTORY_MAX) fail(`history: עד ${CAR_FIT_HISTORY_MAX} הודעות`);
+  const history = raw.map((item, i) => {
+    const h = object(item, ['role', 'content'], `history[${i}]`);
+    if (h.role !== 'user' && h.role !== 'assistant') fail(`history[${i}].role: user או assistant`);
+    return { role: h.role as CarFitTurn['role'], content: text(h.content, `history[${i}].content`, 2000)! };
+  });
+  return { text: text(b.text, 'text', 1000)!, history };
 }
 
 export function syncBody(body: unknown): { repParticipationMode: boolean } {
