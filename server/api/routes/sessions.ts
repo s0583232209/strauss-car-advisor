@@ -13,7 +13,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { AuthUser, CarFitReply, ChatStreamEvent } from '../../../shared/types.ts';
 import { CarFitError, type CarFitService } from '../../bl/services/carFitService.ts';
 import type { SessionService } from '../../bl/services/sessionService.ts';
-import { asyncHandler, rateLimit } from '../middleware.ts';
+import { aiNotice, asyncHandler, rateLimit } from '../middleware.ts';
 import { carFitBody, messageBody, profileUpdateBody, sampleBody, sessionId, syncBody } from '../validate.ts';
 
 /** carFit absent = the "beyond the money" chat is off (older tests) */
@@ -79,7 +79,7 @@ export function sessionsRouter(sessions: SessionService, carFit?: CarFitService)
    * One agent turn. The reply is NDJSON: status lines while the agent works, then the session.
    * Validation errors are normal JSON errors (sent before the stream starts).
    */
-  router.post('/:id/messages', messageLimit, asyncHandler(async (req, res) => {
+  router.post('/:id/messages', messageLimit, aiNotice, asyncHandler(async (req, res) => {
     const id = sessionId(req.params.id);
     const { text, repParticipationMode } = messageBody(req.body);
     await sessions.get(id); // 404 before the stream starts
@@ -114,7 +114,7 @@ export function sessionsRouter(sessions: SessionService, carFit?: CarFitService)
 
   // "Beyond the money": which car fits the employee's life (no money, no full pay data to the model)
   if (carFit) {
-    router.post('/:id/car-fit', carFitLimit, asyncHandler(async (req, res) => {
+    router.post('/:id/car-fit', carFitLimit, aiNotice, asyncHandler(async (req, res) => {
       const { text, history } = carFitBody(req.body);
       const body: CarFitReply = { reply: await carFit.ask(sessionId(req.params.id), text, history) };
       res.json(body);

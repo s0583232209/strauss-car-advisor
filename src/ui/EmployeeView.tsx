@@ -12,11 +12,35 @@ import {
   User,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import type { CarHighlights, ChatMessage, ComparisonResult,EmployeeProfile, Rules, SessionState } from '../../shared/types.ts';
+import type {
+  CarHighlights,
+  ChatMessage,
+  ComparisonResult,
+  EligibilityGroup,
+  EmployeeProfile,
+  Rules,
+  SessionState,
+} from '../../shared/types.ts';
 import { api } from '../api/client.ts';
 import { AdvisorLogo, Pinwheel } from './CarDecor.tsx';
+import { AiNotice } from './AiNotice.tsx';
 import { ComparisonCard } from './ComparisonCard.tsx';
 import { PayslipModal } from './PayslipModal.tsx';
+
+const GROUPS: EligibilityGroup[] = ['א', 'ב', 'ג', 'ד', 'משפחתי'];
+
+/** Profile fields the card edits as numbers (the car name is not editable) */
+type NumericProfileField =
+  | 'base'
+  | 'commissions'
+  | 'bonus'
+  | 'pensionPct'
+  | 'studyFundPct'
+  | 'creditPoints'
+  | 'childrenUpTo23'
+  | 'currentBenefit'
+  | 'currentParticipation'
+  | 'currentMaintenance';
 
 // Empty profile until the server sends the conversation
 const emptyProfile = () => ({}) as EmployeeProfile;
@@ -79,6 +103,7 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
   const busyRef = useRef(false);
   const lastMessageIdRef = useRef<string | undefined>(undefined);
   const profileSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingProfileEdits = useRef<Partial<EmployeeProfile>>({});
 
   /** Shows the server's view of the conversation */
   const applyState = (s: SessionState) => {
@@ -182,12 +207,16 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
   /** Card edit: shown at once, saved (and the comparison recomputed) when typing pauses */
   const handleProfileEdit = (updates: Partial<EmployeeProfile>) => {
     setProfile((prev) => ({ ...prev, ...updates }));
+    // Edits to several fields within one pause are sent together
+    pendingProfileEdits.current = { ...pendingProfileEdits.current, ...updates };
     if (profileSaveTimer.current) clearTimeout(profileSaveTimer.current);
     profileSaveTimer.current = setTimeout(async () => {
       if (!sessionId) return;
+      const pending = pendingProfileEdits.current;
+      pendingProfileEdits.current = {};
       try {
         // undefined is sent as null: the field becomes missing again
-        const body = Object.fromEntries(Object.entries(updates).map(([k, v]) => [k, v ?? null]));
+        const body = Object.fromEntries(Object.entries(pending).map(([k, v]) => [k, v ?? null]));
         const s = await api.sessions.updateProfile(sessionId, body, 'manual');
         setLastComparison(s.lastComparison);
       } catch (err) {
@@ -195,6 +224,30 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
       }
     }, PROFILE_SAVE_DELAY_MS);
   };
+
+  /** One numeric card field: a number input while editing, else the value with its unit ("חסר" when missing) */
+  const numberField = (field: NumericProfileField, unit: '₪' | '%' | '', step = 1, wide = false) =>
+    isEditingProfile ? (
+      <input
+        type="number"
+        min={0}
+        step={step}
+        value={profile[field] ?? ''}
+        onChange={(e) => {
+          const raw = e.target.value;
+          handleProfileEdit({ [field]: raw === '' || Number(raw) < 0 ? undefined : Number(raw) });
+        }}
+        className={`${wide ? 'w-24' : 'w-full'} px-2 py-1 text-xs font-bold border border-slate-300 rounded bg-white`}
+      />
+    ) : (
+      <span className="font-bold text-slate-900">
+        {profile[field] === undefined
+          ? 'חסר'
+          : unit === '₪'
+          ? `${profile[field].toLocaleString()} ₪`
+          : `${profile[field]}${unit}`}
+      </span>
+    );
 
   // Grid placement. Without a comparison the chat is centered and the profile sits at the side;
   // a closed profile shrinks to a round icon and gives its width to the calculations.
@@ -353,6 +406,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
                   <Send className="w-3.5 h-3.5 rotate-180" />
                 </button>
               </form>
+              <AiNotice
+                className="mt-2 justify-center text-center"
+                text="היועץ מבוסס בינה מלאכותית ועלול לטעות. החישובים נעשים במנוע השכר, אבל כדאי לאמת פרטים חשובים מול נציג."
+              />
             </div>
           </div>
         </div>
@@ -438,38 +495,62 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
             <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
               <div>
                 <span className="text-slate-500 block">שכר בסיס חודשי:</span>
-                {isEditingProfile ? (
-                  <input
-                    type="number"
-                    min={0}
-                    value={profile.base ?? ''}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      handleProfileEdit({ base: raw === '' || Number(raw) < 0 ? undefined : Number(raw) });
-                    }}
-                    className="w-24 px-2 py-1 text-xs font-bold border border-slate-300 rounded bg-white"
-                  />
-                ) : (
-                  <span className="font-bold text-slate-900 text-sm">
-                    {profile.base !== undefined ? `${profile.base.toLocaleString()} ₪` : 'חסר'}
-                  </span>
-                )}
+                <span className="text-sm">{numberField('base', '₪', 1, true)}</span>
               </div>
-              <span className="text-xs px-2 py-0.5 rounded bg-lime-light text-success border border-green/25 font-semibold">
-                קבוצה {profile.group ?? 'חסר'}
-              </span>
+              {isEditingProfile ? (
+                <label className="flex items-center gap-1 text-xs text-slate-500">
+                  <span>קבוצה</span>
+                  <select
+                    value={profile.group ?? ''}
+                    onChange={(e) => handleProfileEdit({ group: e.target.value as EligibilityGroup })}
+                    className="px-1.5 py-1 text-xs font-bold border border-slate-300 rounded bg-white text-ink"
+                  >
+                    {profile.group === undefined && <option value="" disabled>חסר</option>}
+                    {GROUPS.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <span className="text-xs px-2 py-0.5 rounded bg-lime-light text-success border border-green/25 font-semibold">
+                  קבוצה {profile.group ?? 'חסר'}
+                </span>
+              )}
             </div>
 
             {/* Occupation */}
             <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
               <span className="text-slate-500 block mb-0.5">עיסוק / תפקיד:</span>
-              <span className="font-bold text-slate-900">{profile.occupation || 'לא הוגדר'}</span>
+              {isEditingProfile ? (
+                <input
+                  type="text"
+                  maxLength={120}
+                  value={profile.occupation ?? ''}
+                  onChange={(e) => handleProfileEdit({ occupation: e.target.value || undefined })}
+                  className="w-full px-2 py-1 text-xs font-bold border border-slate-300 rounded bg-white"
+                />
+              ) : (
+                <span className="font-bold text-slate-900">{profile.occupation || 'לא הוגדר'}</span>
+              )}
             </div>
 
             {/* Current Car */}
             <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-slate-500">מצב רכב נוכחי:</span>
+                {isEditingProfile ? (
+                  <select
+                    value={profile.hasCar === undefined ? '' : profile.hasCar ? 'car' : 'maintenance'}
+                    onChange={(e) => handleProfileEdit({ hasCar: e.target.value === 'car' })}
+                    className="px-1.5 py-0.5 text-[11px] font-semibold border border-slate-300 rounded bg-white text-ink"
+                  >
+                    {profile.hasCar === undefined && <option value="" disabled>חסר</option>}
+                    <option value="car">רכב חברה קיים</option>
+                    <option value="maintenance">ויתור (אחזקה)</option>
+                  </select>
+                ) : (
                 <span
                   className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                     profile.hasCar
@@ -479,18 +560,31 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
                 >
                   {profile.hasCar === undefined ? 'חסר' : profile.hasCar ? 'רכב חברה קיים' : 'ויתור (אחזקה)'}
                 </span>
+                )}
               </div>
+              {/* The car name is not edited here: it comes from the catalog via the chat */}
               <div className="font-bold text-slate-900">
-                {profile.hasCar === undefined
-                  ? 'חסר'
-                  : profile.hasCar
-                  ? profile.currentCarName
-                  : `אחזקת רכב: ${profile.currentMaintenance === undefined ? 'חסר' : `${profile.currentMaintenance.toLocaleString()} ₪`}`}
+                {profile.hasCar === undefined ? (
+                  'חסר'
+                ) : profile.hasCar ? (
+                  profile.currentCarName || 'חסר'
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <span className="shrink-0">אחזקת רכב:</span>
+                    {numberField('currentMaintenance', '₪', 1, true)}
+                  </span>
+                )}
               </div>
               {profile.hasCar && (
-                <div className="text-[11px] text-slate-600 mt-1 flex justify-between">
-                  <span>שווי שימוש: {profile.currentBenefit === undefined ? 'חסר' : `${profile.currentBenefit.toLocaleString()} ₪`}</span>
-                  <span>השתתפות: {profile.currentParticipation === undefined ? 'חסר' : `${profile.currentParticipation.toLocaleString()} ₪`}</span>
+                <div className="text-[11px] text-slate-600 mt-1 flex justify-between gap-2">
+                  <span className="flex items-center gap-1">
+                    <span className="shrink-0">שווי שימוש:</span>
+                    {numberField('currentBenefit', '₪', 1, true)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="shrink-0">השתתפות:</span>
+                    {numberField('currentParticipation', '₪', 1, true)}
+                  </span>
                 </div>
               )}
             </div>
@@ -499,27 +593,27 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">עמלות חודשיות:</span>
-                <span className="font-bold text-slate-900">{profile.commissions === undefined ? 'חסר' : `${profile.commissions.toLocaleString()} ₪`}</span>
+                {numberField('commissions', '₪')}
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">בונוס חודשי:</span>
-                <span className="font-bold text-slate-900">{profile.bonus === undefined ? 'חסר' : `${profile.bonus.toLocaleString()} ₪`}</span>
+                {numberField('bonus', '₪')}
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">הפרשת פנסיה:</span>
-                <span className="font-bold text-slate-900">{profile.pensionPct === undefined ? 'חסר' : `${profile.pensionPct}%`}</span>
+                {numberField('pensionPct', '%', 0.1)}
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">קרן השתלמות:</span>
-                <span className="font-bold text-slate-900">{profile.studyFundPct === undefined ? 'חסר' : `${profile.studyFundPct}%`}</span>
+                {numberField('studyFundPct', '%', 0.1)}
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">נקודות זיכוי:</span>
-                <span className="font-bold text-slate-900">{profile.creditPoints ?? 'חסר'}</span>
+                {numberField('creditPoints', '', 0.25)}
               </div>
               <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 block text-[11px]">ילדים עד 23:</span>
-                <span className="font-bold text-slate-900">{profile.childrenUpTo23 ?? 'חסר'}</span>
+                {numberField('childrenUpTo23', '')}
               </div>
             </div>
           </div>

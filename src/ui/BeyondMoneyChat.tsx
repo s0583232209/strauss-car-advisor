@@ -12,6 +12,7 @@
 import { CarFront, Lock, Send, Sparkles } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import type { CarFitTurn } from '../../shared/types.ts';
+import { AiNotice } from './AiNotice.tsx';
 
 const SUGGESTIONS = [
   'איזה מהרכבים מתאים יותר למשפחה שלי?',
@@ -203,10 +204,13 @@ export const BeyondMoneyChat: React.FC<BeyondMoneyChatProps> = ({ onAsk }) => {
           disabled={!input.trim() || busy}
           className="lift w-10 h-10 rounded-full bg-blue text-white hover:bg-blue-dark disabled:opacity-40 transition-colors flex items-center justify-center shrink-0"
           title="שלח"
+          aria-label="שלח שאלה לסוכן הרכב"
         >
           <Send className="w-4 h-4 rotate-180" />
         </button>
       </form>
+
+      <AiNotice className="px-4 pb-2 bg-white" />
 
       <p className="px-4 py-2 text-[11px] text-muted bg-surface border-t border-line flex items-start gap-1.5">
         <Lock className="w-3 h-3 shrink-0 mt-0.5" />

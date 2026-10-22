@@ -6,7 +6,7 @@
 /** Payslip reading: the file goes to Gemini from the server; only the known fields come back */
 
 import express, { Router } from 'express';
-import { asyncHandler, rateLimit } from '../middleware.ts';
+import { aiNotice, asyncHandler, rateLimit } from '../middleware.ts';
 import { payslipBody, payslipResult } from '../validate.ts';
 
 export function payslipRouter(extract: (fileData: string, mimeType: string) => Promise<unknown>): Router {
@@ -15,6 +15,7 @@ export function payslipRouter(extract: (fileData: string, mimeType: string) => P
   router.post(
     '/extract',
     rateLimit({ name: 'payslip', windowMs: 10 * 60_000, max: 10 }),
+    aiNotice,
     // Own body limit (base64 of a file up to ~10 MB); mounted before the global 100kb JSON parser
     express.json({ limit: '15mb' }),
     asyncHandler(async (req, res) => {

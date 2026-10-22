@@ -17,7 +17,7 @@ import type { HighlightsService } from '../bl/services/highlightsService.ts';
 import { referenceMeta, type SessionService } from '../bl/services/sessionService.ts';
 import type { TicketService } from '../bl/services/ticketService.ts';
 import { ALL_ROLES, requireRole } from './authCookies.ts';
-import { asyncHandler, cors, errorHandler, rateLimit, securityHeaders } from './middleware.ts';
+import { aiNotice, asyncHandler, cors, errorHandler, rateLimit, securityHeaders } from './middleware.ts';
 import { adminRouter } from './routes/admin.ts';
 import { authRouter } from './routes/auth.ts';
 import { highlightsAdminRouter } from './routes/highlights.ts';
@@ -86,7 +86,7 @@ export function createApp(deps: AppDeps): express.Express {
   });
 
   // Approved pros and cons of the catalog cars, by car id (shown beside the comparison)
-  api.get('/highlights', anyUser, asyncHandler(async (_req, res) => {
+  api.get('/highlights', anyUser, aiNotice, asyncHandler(async (_req, res) => {
     res.json(deps.highlights ? await deps.highlights.approved() : {});
   }));
 
