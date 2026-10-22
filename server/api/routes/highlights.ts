@@ -7,7 +7,7 @@
 
 import express, { NextFunction, Request, Response, Router } from 'express';
 import { HighlightsError, type HighlightsService } from '../../bl/services/highlightsService.ts';
-import { asyncHandler, rateLimit } from '../middleware.ts';
+import { aiNotice, asyncHandler, rateLimit } from '../middleware.ts';
 import { carIdParam, highlightsBody } from '../validate.ts';
 
 /** Mounted at /admin/highlights (role admin, checked in app.ts) */
@@ -23,6 +23,7 @@ export function highlightsAdminRouter(highlights: HighlightsService): Router {
   router.post(
     '/:carId/draft',
     rateLimit({ name: 'highlights-draft', windowMs: 60_000, max: 40 }),
+    aiNotice,
     asyncHandler(async (req, res) => {
       res.json(await highlights.draft(carIdParam(req.params.carId)));
     })

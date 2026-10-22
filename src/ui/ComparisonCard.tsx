@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { CarFitTurn, CarHighlights, ComparisonResult, Rules } from '../../shared/types.ts';
+import { AiNotice } from './AiNotice.tsx';
 import { BeyondMoneyChat } from './BeyondMoneyChat.tsx';
 import { WaterfallChart } from './WaterfallChart.tsx';
 
@@ -264,9 +265,10 @@ export const ComparisonCard: React.FC<ComparisonCardProps> = ({
                   <CarHighlightsColumn title="החלופה" carLabel={comparison.altCarLabel} highlights={highlights.alt} />
                 )}
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">
-                סיכום כללי שאושר על ידי מנהל המערכת. אינו מפרט טכני; לפרטים מלאים פנו ליבואן.
-              </p>
+              <AiNotice
+                className="mt-2"
+                text="סיכום כללי שנכתב בעזרת בינה מלאכותית ואושר על ידי מנהל המערכת, ועדיין עלול לכלול טעויות. אינו מפרט טכני; לפרטים מלאים פנו ליבואן."
+              />
             </>
           )}
           {/* A new car pair starts a new chat */}

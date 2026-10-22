@@ -16,6 +16,7 @@ import {
 import React, { useState } from 'react';
 import type { ExtractedPayslipData } from '../../shared/types.ts';
 import { api } from '../api/client.ts';
+import { AiNotice } from './AiNotice.tsx';
 import { EmployeeProfile } from '../../shared/types.ts';
 
 interface PayslipModalProps {
@@ -215,6 +216,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
                   העלה קובץ אחר
                 </button>
               </div>
+              <AiNotice text="הקובץ נקרא על ידי בינה מלאכותית, שעלולה לטעות בקריאה. בדקו כל ערך מול התלוש לפני מיזוג." />
 
               <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-80 overflow-y-auto">
                 {Object.entries(extractedData).map(([key, field]) => {

@@ -12,6 +12,7 @@ import { CheckCircle2, Loader2, RefreshCw, Sparkles, ThumbsDown, ThumbsUp, Trash
 import React, { useEffect, useState } from 'react';
 import type { AdminHighlightsRow, CarHighlights } from '../../shared/types.ts';
 import { api, ApiError } from '../api/client.ts';
+import { AiNotice } from './AiNotice.tsx';
 
 const SLOTS = 3;
 
@@ -118,7 +119,8 @@ export const HighlightsPanel: React.FC<{ onError: (err: unknown) => void }> = ({
             <span className="font-semibold text-warning">{counts.draft} טיוטות</span> ·{' '}
             <span className="font-semibold">{counts.none + counts.stale} חסרים</span>
           </div>
-          <div>הטיוטה נכתבת על ידי AI, בלי מספרים. העובדים רואים רק מה שאושר.</div>
+          <div>העובדים רואים רק מה שאושר.</div>
+          <AiNotice text="הטיוטה נכתבת על ידי בינה מלאכותית, בלי מספרים, ועלולה לכלול טעויות. קראו ותקנו לפני אישור." />
         </div>
         <div className="flex flex-wrap gap-2">
           <button
