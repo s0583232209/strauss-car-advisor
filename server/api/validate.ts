@@ -99,9 +99,9 @@ const NUMERIC_PROFILE: Record<string, [number, number]> = {
   creditPoints: [0, 15],
   childrenUpTo23: [0, 15],
   currentParticipation: [0, MONEY_MAX],
-  currentBenefit: [0, MONEY_MAX],
   currentMaintenance: [0, MONEY_MAX],
 };
+// currentBenefit is not editable: it comes from the catalog (Strauss rules), or from a rep
 const TEXT_PROFILE = ['occupation', 'currentCarName'] as const;
 const GROUPS = ['א', 'ב', 'ג', 'ד', 'משפחתי'];
 

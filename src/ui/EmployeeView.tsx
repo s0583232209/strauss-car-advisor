@@ -29,7 +29,7 @@ import { PayslipModal } from './PayslipModal.tsx';
 
 const GROUPS: EligibilityGroup[] = ['א', 'ב', 'ג', 'ד', 'משפחתי'];
 
-/** Profile fields the card edits as numbers (the car name is not editable) */
+/** Profile fields the card edits as numbers (car name and benefit value are not editable) */
 type NumericProfileField =
   | 'base'
   | 'commissions'
@@ -38,7 +38,6 @@ type NumericProfileField =
   | 'studyFundPct'
   | 'creditPoints'
   | 'childrenUpTo23'
-  | 'currentBenefit'
   | 'currentParticipation'
   | 'currentMaintenance';
 
@@ -579,7 +578,10 @@ export const EmployeeView: React.FC<EmployeeViewProps> = ({ onThrottledChange })
                 <div className="text-[11px] text-slate-600 mt-1 flex justify-between gap-2">
                   <span className="flex items-center gap-1">
                     <span className="shrink-0">שווי שימוש:</span>
-                    {numberField('currentBenefit', '₪', 1, true)}
+                    {/* Read-only: the benefit value comes from the catalog (Strauss rules) */}
+                    <span className="font-bold text-slate-900" title="נקבע לפי כללי שטראוס ואינו ניתן לעריכה">
+                      {profile.currentBenefit === undefined ? 'חסר' : `${profile.currentBenefit.toLocaleString()} ₪`}
+                    </span>
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="shrink-0">השתתפות:</span>

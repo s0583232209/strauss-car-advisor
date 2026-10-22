@@ -130,6 +130,8 @@ describe('sessions API', () => {
     expect((await call('PATCH', `/sessions/${s.id}/profile`, { updates: { base: -5 } })).status).toBe(400);
     expect((await call('PATCH', `/sessions/${s.id}/profile`, { updates: { pensionPct: 60 } })).status).toBe(400);
     expect((await call('PATCH', `/sessions/${s.id}/profile`, { updates: { isAdmin: true } })).status).toBe(400);
+    // The benefit value comes from the catalog, never from the employee
+    expect((await call('PATCH', `/sessions/${s.id}/profile`, { updates: { currentBenefit: 100 } })).status).toBe(400);
     const ok = await call('PATCH', `/sessions/${s.id}/profile`, { updates: { base: 14200, group: 'ב' } });
     expect(ok.status).toBe(200);
     expect((await ok.json()).profile).toMatchObject({ base: 14200, group: 'ב' });
